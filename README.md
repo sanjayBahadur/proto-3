@@ -89,6 +89,7 @@ Run the following SQL migrations in your Supabase SQL Editor (**SQL Editor** →
 | 1 | `001_create_profiles.sql` | User profiles with roles |
 | 2 | `002_create_properties.sql` | Properties table with RLS |
 | 3 | `003_add_ical_url.sql` | iCal URL column |
+| 4 | `004_create_bookings.sql` | Bookings table with RLS |
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for full SQL content.
 
@@ -137,6 +138,29 @@ pnpm dev
 - `properties_owner_id_idx` — Fast lookup by owner
 - `properties_location_idx` — Fast geospatial queries (lat, lng)
 - `properties_created_at_idx` — Fast sorting by creation date
+
+### bookings
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key, auto-generated |
+| `property_id` | UUID | References `properties(id)`, cascade delete |
+| `source` | TEXT | Source of booking: "ical", "manual", etc. (default: "ical") |
+| `external_uid` | TEXT | Unique ID from external calendar (e.g., iCal UID) |
+| `start_date` | TIMESTAMPTZ | Booking start date/time |
+| `end_date` | TIMESTAMPTZ | Booking end date/time |
+| `summary` | TEXT | Booking title/summary (nullable) |
+| `raw` | JSONB | Raw event data from source (nullable) |
+| `created_at` | TIMESTAMPTZ | When the booking was created |
+| `updated_at` | TIMESTAMPTZ | When the booking was last updated |
+
+**Indexes:**
+- `bookings_property_external_uid_idx` — Unique constraint for idempotent upserts
+- `bookings_property_id_idx` — Fast lookup by property
+- `bookings_date_range_idx` — Fast date range queries
+- `bookings_start_date_idx` — Fast sorting by start date
+
+**RLS Policies:** Users can only access bookings for properties they own.
 
 ---
 
