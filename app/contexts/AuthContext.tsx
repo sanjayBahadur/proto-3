@@ -9,10 +9,13 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { ensureUserProfileClient } from "@/lib/supabase/profiles";
 import type { User } from "@supabase/supabase-js";
+import type { UserRole } from "@/lib/supabase/roles";
 
 interface AuthContextType {
   user: User | null;
+  role: UserRole | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
@@ -22,29 +25,29 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
-    // Get initial session
+    // Get initial session and ensure profile exists
     const getUser = async () => {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/a0648e96-4ca1-4d2b-9831-626e9ff9c273',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.tsx:31',message:'getUser called',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a0648e96-4ca1-4d2b-9831-626e9ff9c273',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.tsx:38',message:'getUser success',data:{hasUser:!!user,userId:user?.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
+
         setUser(user);
-        setIsLoading(false);
-      } catch (err: unknown) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a0648e96-4ca1-4d2b-9831-626e9ff9c273',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.tsx:45',message:'getUser error',data:{error:String(err)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
+
+        if (user) {
+          // Ensure profile exists and get role
+          const profile = await ensureUserProfileClient(user.id);
+          setRole(profile?.role ?? null);
+        }
+      } catch (err) {
+        console.error("Error getting user:", err);
+      } finally {
         setIsLoading(false);
       }
     };
@@ -54,8 +57,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+
+      if (currentUser) {
+        // Ensure profile exists on auth state change (e.g., after login)
+        const profile = await ensureUserProfileClient(currentUser.id);
+        setRole(profile?.role ?? null);
+      } else {
+        setRole(null);
+      }
+
       setIsLoading(false);
     });
 
@@ -82,12 +95,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await supabase.auth.signOut();
+    setRole(null);
     router.push("/login");
     router.refresh();
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, role, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

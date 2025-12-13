@@ -6,7 +6,7 @@ export default function Home() {
       <div className="text-center">
         <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
           Welcome to Proto
-        </h1>
+          </h1>
         <p className="mx-auto mt-4 max-w-md text-zinc-600 dark:text-zinc-400">
           A minimal Next.js application with authentication. Sign in to access
           your dashboard.
