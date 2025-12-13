@@ -90,6 +90,7 @@ Run the following SQL migrations in your Supabase SQL Editor (**SQL Editor** →
 | 2 | `002_create_properties.sql` | Properties table with RLS |
 | 3 | `003_add_ical_url.sql` | iCal URL column |
 | 4 | `004_create_bookings.sql` | Bookings table with RLS |
+| 5 | `005_create_tasks.sql` | Tasks and task_events tables |
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for full SQL content.
 
@@ -162,6 +163,48 @@ pnpm dev
 
 **RLS Policies:** Users can only access bookings for properties they own.
 
+### tasks
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key, auto-generated |
+| `property_id` | UUID | References `properties(id)`, cascade delete |
+| `type` | TEXT | Task type: "cleaning", "restock", "maintenance" |
+| `due_at` | TIMESTAMPTZ | When the task is due |
+| `status` | TEXT | Status: "open", "assigned", "in_progress", "done", "verified" |
+| `assigned_to` | UUID | References `auth.users(id)`, nullable |
+| `created_from_booking_id` | UUID | References `bookings(id)`, nullable |
+| `created_at` | TIMESTAMPTZ | When the task was created |
+| `updated_at` | TIMESTAMPTZ | When the task was last updated |
+
+**Indexes:**
+- `tasks_property_id_idx` — Fast lookup by property
+- `tasks_assigned_to_idx` — Fast lookup by assignee
+- `tasks_status_idx` — Fast filtering by status
+- `tasks_due_at_idx` — Fast sorting by due date
+- `tasks_property_status_idx` — Combined property + status queries
+- `tasks_assigned_status_idx` — Combined assignee + status queries
+
+**RLS Policies:**
+- Managers can CRUD tasks for their properties
+- Staff can read tasks assigned to them and update status
+
+### task_events
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key, auto-generated |
+| `task_id` | UUID | References `tasks(id)`, cascade delete |
+| `actor_id` | UUID | User who made the change |
+| `from_status` | TEXT | Previous status (nullable for creation) |
+| `to_status` | TEXT | New status |
+| `note` | TEXT | Optional note/comment |
+| `created_at` | TIMESTAMPTZ | When the event occurred |
+
+**RLS Policies:**
+- Managers can view/create events for tasks on their properties
+- Staff can view/create events for tasks assigned to them
+
 ---
 
 ## Project Structure
@@ -169,8 +212,10 @@ pnpm dev
 ```
 ├── app/
 │   ├── actions/              # Server actions
+│   │   ├── bookings.ts       # Booking CRUD
 │   │   ├── properties.ts     # Property CRUD with logging
-│   │   └── sync.ts           # Sync stub action
+│   │   ├── sync.ts           # iCal sync action
+│   │   └── tasks.ts          # Task & task event CRUD
 │   ├── components/
 │   │   ├── ui/               # Reusable UI components
 │   │   ├── Map.tsx           # Leaflet map component
@@ -207,10 +252,10 @@ pnpm dev
 
 ### Roles
 
-| Role | Dashboard | Staff Portal | Properties | Create/Edit |
-|------|-----------|--------------|------------|-------------|
-| **manager** | ✅ | ❌ | ✅ | ✅ |
-| **staff** | ❌ | ✅ | ❌ | ❌ |
+| Role | Dashboard | Staff Portal | Properties | Tasks |
+|------|-----------|--------------|------------|-------|
+| **manager** | ✅ | ❌ | Full CRUD | Full CRUD |
+| **staff** | ❌ | ✅ | ❌ | Read assigned, update status |
 
 ### Server-side usage
 
