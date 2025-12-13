@@ -5,7 +5,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import IcalUrlForm from "@/app/components/IcalUrlForm";
 import SyncBookingsButton from "@/app/components/SyncBookingsButton";
-import BookingsList from "@/app/components/BookingsList";
+import BookingsSection from "@/app/components/BookingsSection";
 
 interface PropertyPageProps {
   params: Promise<{ id: string }>;
@@ -247,10 +247,7 @@ export default async function PropertyPage({ params }: PropertyPageProps) {
 
       {/* Bookings Section */}
       <div className="mt-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-          Bookings
-        </h2>
-        <BookingsList propertyId={property.id} />
+        <BookingsSection propertyId={property.id} />
       </div>
 
       {/* Actions */}
