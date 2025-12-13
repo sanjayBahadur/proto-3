@@ -1,37 +1,40 @@
 "use client";
 
 import { useState } from "react";
-import { syncPropertyBookings } from "../actions/sync";
+import { syncPropertyBookings, getSyncStatusMessage, type SyncSummary } from "../actions/sync";
 
 interface SyncBookingsButtonProps {
   propertyId: string;
+  hasIcalUrl: boolean;
 }
 
 export default function SyncBookingsButton({
   propertyId,
+  hasIcalUrl,
 }: SyncBookingsButtonProps) {
   const [isSyncing, setIsSyncing] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [result, setResult] = useState<SyncSummary | null>(null);
 
   const handleSync = async () => {
     setIsSyncing(true);
-    setMessage(null);
+    setResult(null);
 
-    const result = await syncPropertyBookings(propertyId);
+    const summary = await syncPropertyBookings(propertyId);
 
-    setMessage(result.message);
+    setResult(summary);
     setIsSyncing(false);
 
-    // Clear message after 3 seconds
-    setTimeout(() => setMessage(null), 3000);
+    // Clear result after 10 seconds
+    setTimeout(() => setResult(null), 10000);
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <button
         onClick={handleSync}
-        disabled={isSyncing}
-        className="flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+        disabled={isSyncing || !hasIcalUrl}
+        title={!hasIcalUrl ? "Add an iCal URL first" : undefined}
+        className="flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
       >
         {isSyncing ? (
           <>
@@ -76,10 +79,71 @@ export default function SyncBookingsButton({
         )}
       </button>
 
-      {message && (
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{message}</p>
+      {result && (
+        <div
+          className={`rounded-md p-3 text-sm ${
+            result.success
+              ? "bg-green-50 text-green-800 dark:bg-green-950/50 dark:text-green-200"
+              : "bg-red-50 text-red-800 dark:bg-red-950/50 dark:text-red-200"
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            {result.success ? (
+              <svg
+                className="mt-0.5 h-4 w-4 flex-shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="mt-0.5 h-4 w-4 flex-shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            )}
+            <div>
+              <p className="font-medium">{getSyncStatusMessage(result)}</p>
+              {result.success && (
+                <p className="mt-1 text-xs opacity-75">
+                  Completed in {result.duration}ms
+                </p>
+              )}
+              {result.errors.length > 0 && !result.success && (
+                <ul className="mt-1 text-xs opacity-75">
+                  {result.errors.slice(0, 3).map((err, i) => (
+                    <li key={i}>• {err}</li>
+                  ))}
+                  {result.errors.length > 3 && (
+                    <li>• ...and {result.errors.length - 3} more</li>
+                  )}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!hasIcalUrl && (
+        <p className="text-xs text-zinc-500">
+          Add an iCal URL above to enable syncing
+        </p>
       )}
     </div>
   );
 }
-

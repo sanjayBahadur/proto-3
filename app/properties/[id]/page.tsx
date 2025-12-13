@@ -174,7 +174,7 @@ export default async function PropertyPage({ params }: PropertyPageProps) {
           <div className="space-y-4">
             <IcalUrlForm propertyId={property.id} currentUrl={property.ical_url} />
             <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
-              <SyncBookingsButton propertyId={property.id} />
+              <SyncBookingsButton propertyId={property.id} hasIcalUrl={!!property.ical_url} />
             </div>
           </div>
         </div>
