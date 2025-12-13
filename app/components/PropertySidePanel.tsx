@@ -1,13 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { updateProperty, type Property } from "../actions/properties";
+import { getNextBooking } from "../actions/bookings";
 import type { UserRole } from "@/lib/supabase/roles";
 
 interface PropertySidePanelProps {
   property: Property | null;
   onClose: () => void;
   userRole: UserRole | null;
+}
+
+interface NextBookingData {
+  start_date: string;
+  end_date: string;
+  summary: string | null;
+}
+
+function formatDateShort(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function calculateNights(start: string, end: string): number {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  return Math.max(0, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+function isCurrentBooking(start: string, end: string): boolean {
+  const now = new Date();
+  return new Date(start) <= now && new Date(end) >= now;
 }
 
 export default function PropertySidePanel({
@@ -22,7 +48,28 @@ export default function PropertySidePanel({
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
 
+  // Next booking state
+  const [nextBooking, setNextBooking] = useState<NextBookingData | null>(null);
+  const [loadingBooking, setLoadingBooking] = useState(false);
+
   const canEdit = userRole === "manager";
+
+  // Fetch next booking when property changes
+  useEffect(() => {
+    if (!property) {
+      setNextBooking(null);
+      return;
+    }
+
+    async function fetchNextBooking() {
+      setLoadingBooking(true);
+      const { data } = await getNextBooking(property!.id);
+      setNextBooking(data);
+      setLoadingBooking(false);
+    }
+
+    fetchNextBooking();
+  }, [property?.id]);
 
   if (!property) return null;
 
@@ -164,25 +211,68 @@ export default function PropertySidePanel({
                 </div>
               )}
 
+              {/* Next Booking */}
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">
+                <label className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  Next Booking
+                </label>
+                {loadingBooking ? (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-zinc-500">
+                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Loading...
+                  </div>
+                ) : nextBooking ? (
+                  <div className="mt-2">
+                    <div className="flex items-center gap-2">
+                      {isCurrentBooking(nextBooking.start_date, nextBooking.end_date) && (
+                        <span className="inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/50 dark:text-green-300">
+                          <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                          Now
+                        </span>
+                      )}
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                        {formatDateShort(nextBooking.start_date)} – {formatDateShort(nextBooking.end_date)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                      {calculateNights(nextBooking.start_date, nextBooking.end_date)} nights
+                      {nextBooking.summary && ` · ${nextBooking.summary}`}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    No upcoming bookings
+                  </p>
+                )}
+              </div>
+
+              {/* Next Cleaning (Placeholder) */}
+              <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50/50 p-3 dark:border-zinc-700 dark:bg-zinc-800/30">
+                <label className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  Next Cleaning
+                </label>
+                <div className="mt-2 flex items-center gap-2">
+                  <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Coming soon
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-zinc-400">
+                  Task scheduling not yet implemented
+                </p>
+              </div>
+
               <div>
                 <label className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   Coordinates
                 </label>
                 <p className="mt-1 font-mono text-sm text-zinc-600 dark:text-zinc-400">
                   {property.lat.toFixed(6)}, {property.lng.toFixed(6)}
-                </p>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  Created
-                </label>
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  {new Date(property.created_at).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
                 </p>
               </div>
             </div>
@@ -209,10 +299,35 @@ export default function PropertySidePanel({
             </div>
           ) : (
             <div className="space-y-2">
+              <Link
+                href={`/properties/${property.id}`}
+                className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                  />
+                </svg>
+                View Details
+              </Link>
               {canEdit && (
                 <button
                   onClick={startEditing}
-                  className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                  className="flex w-full items-center justify-center gap-2 rounded-md border border-zinc-300 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   <svg
                     className="h-4 w-4"
@@ -230,27 +345,6 @@ export default function PropertySidePanel({
                   Edit Property
                 </button>
               )}
-              <a
-                href={`https://www.google.com/maps?q=${property.lat},${property.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex w-full items-center justify-center gap-2 rounded-md border border-zinc-300 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              >
-                <svg
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                  />
-                </svg>
-                Open in Google Maps
-              </a>
             </div>
           )}
         </div>

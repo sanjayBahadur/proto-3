@@ -400,6 +400,44 @@ export async function deleteBooking(
 }
 
 /**
+ * Get next upcoming booking for a property (minimal data for display)
+ */
+export async function getNextBooking(
+  propertyId: string
+): Promise<{ data: { start_date: string; end_date: string; summary: string | null } | null; error: string | null }> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: null, error: "Unauthorized" };
+  }
+
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("start_date, end_date, summary")
+    .eq("property_id", propertyId)
+    .gte("end_date", now)
+    .order("start_date", { ascending: true })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      // No booking found
+      return { data: null, error: null };
+    }
+    return { data: null, error: error.message };
+  }
+
+  return { data, error: null };
+}
+
+/**
  * Delete all bookings for a property (useful before re-syncing)
  */
 export async function deletePropertyBookings(
