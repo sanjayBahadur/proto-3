@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Proto
+
+A minimal Next.js application with Supabase authentication.
+
+## Features
+
+- Next.js 16 with App Router
+- TypeScript
+- Tailwind CSS
+- Supabase Auth (email + password)
+- Protected routes with middleware
+- Server and client-side authentication
 
 ## Getting Started
 
-First, run the development server:
+### 1. Install dependencies
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Set up Supabase
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Create a new project at [supabase.com](https://supabase.com)
+2. Go to **Project Settings** → **API**
+3. Copy the following values:
+   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - **anon public** key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Configure environment variables
 
-## Learn More
+Create a `.env.local` file in the project root:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+cp .env.local.example .env.local
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Then edit `.env.local` with your Supabase credentials:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+```
 
-## Deploy on Vercel
+### 4. Enable Email Auth in Supabase
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Go to **Authentication** → **Providers** in your Supabase dashboard
+2. Ensure **Email** provider is enabled
+3. (Optional) Disable email confirmation for testing:
+   - Go to **Authentication** → **Providers** → **Email**
+   - Toggle off "Confirm email"
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 5. Create a test user
+
+Option A: Via Supabase Dashboard
+1. Go to **Authentication** → **Users**
+2. Click "Add user" → "Create new user"
+3. Enter email and password (min 6 characters)
+
+Option B: Add a signup form to your app (not included by default)
+
+### 6. Run the development server
+
+```bash
+pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Project Structure
+
+```
+├── app/
+│   ├── components/
+│   │   └── Navbar.tsx           # Navigation with auth state
+│   ├── contexts/
+│   │   └── AuthContext.tsx      # Client-side auth context
+│   ├── dashboard/
+│   │   └── page.tsx             # Protected dashboard (server component)
+│   ├── login/
+│   │   └── page.tsx             # Login form
+│   ├── globals.css
+│   ├── layout.tsx
+│   └── page.tsx
+├── lib/
+│   └── supabase/
+│       ├── client.ts            # Browser Supabase client
+│       ├── middleware.ts        # Session refresh & route protection
+│       └── server.ts            # Server Supabase client
+├── middleware.ts                # Next.js middleware entry
+└── .env.local.example
+```
+
+## Authentication Flow
+
+1. **Middleware** (`middleware.ts`) runs on every request:
+   - Refreshes the session if expired
+   - Redirects unauthenticated users from `/dashboard` to `/login`
+   - Redirects authenticated users from `/login` to `/dashboard`
+
+2. **Server Components** use `lib/supabase/server.ts` to get the current user
+
+3. **Client Components** use the `AuthContext` for reactive auth state
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase anonymous/public key |
+
+Both variables are prefixed with `NEXT_PUBLIC_` to make them available in the browser.
+
+## Security Notes
+
+- Session tokens are stored in HTTP-only cookies (handled by `@supabase/ssr`)
+- The `anon` key is safe to expose publicly—Row Level Security (RLS) should protect your data
+- Always validate user permissions server-side before sensitive operations
