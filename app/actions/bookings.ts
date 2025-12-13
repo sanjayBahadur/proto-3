@@ -247,12 +247,14 @@ export async function listBookings(
     .eq("property_id", propertyId)
     .order("start_date", { ascending: true });
 
+  // Use overlap logic: bookings that overlap the date range
+  // A booking overlaps if: booking.end_date > startDate AND booking.start_date < endDate
   if (options?.startDate) {
-    query = query.gte("start_date", options.startDate);
+    query = query.gt("end_date", options.startDate);
   }
 
   if (options?.endDate) {
-    query = query.lte("end_date", options.endDate);
+    query = query.lt("start_date", options.endDate);
   }
 
   if (options?.limit) {
