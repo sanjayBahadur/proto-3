@@ -516,3 +516,253 @@ export async function staffUpdateTaskStatus(
   return { data: data as Task, error: null };
 }
 
+// =============================================================================
+// MANAGER TASK ASSIGNMENT
+// =============================================================================
+
+export interface StaffMember {
+  id: string;
+  email: string | null;
+  role: string;
+}
+
+/**
+ * Get list of staff members for task assignment dropdown
+ * Only accessible by managers
+ */
+export async function listStaffMembers(): Promise<{
+  data: StaffMember[];
+  error: string | null;
+}> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    logger.unauthorized("listStaffMembers", {});
+    return { data: [], error: "Unauthorized" };
+  }
+
+  // Verify user is a manager
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || profile.role !== "manager") {
+    logger.warn("Non-manager attempted to list staff", { userId: user.id });
+    return { data: [], error: "Only managers can view staff list" };
+  }
+
+  // Get staff members from profiles
+  const { data: staffProfiles, error } = await supabase
+    .from("profiles")
+    .select("id, email, role")
+    .eq("role", "staff")
+    .order("email", { ascending: true });
+
+  if (error) {
+    logger.apiError("listStaffMembers", error, { userId: user.id });
+    return { data: [], error: error.message };
+  }
+
+  // If email not in profiles, try to get from auth.users via a join isn't possible
+  // We'll need to handle this differently - for now return what we have
+  return { data: staffProfiles as StaffMember[], error: null };
+}
+
+/**
+ * Assign a task to a staff member
+ * Only managers can assign tasks for their properties
+ */
+export async function assignTask(
+  taskId: string,
+  staffId: string,
+  note?: string
+): Promise<{ data: Task | null; error: string | null }> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    logger.unauthorized("assignTask", { taskId, staffId });
+    return { data: null, error: "Unauthorized" };
+  }
+
+  // Verify user is a manager
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || profile.role !== "manager") {
+    logger.warn("Non-manager attempted to assign task", { userId: user.id, taskId });
+    return { data: null, error: "Only managers can assign tasks" };
+  }
+
+  // Verify staff member exists and has staff role
+  const { data: staffProfile } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("id", staffId)
+    .single();
+
+  if (!staffProfile || staffProfile.role !== "staff") {
+    return { data: null, error: "Invalid staff member" };
+  }
+
+  // Get current task and verify ownership via property
+  const { data: task, error: taskError } = await supabase
+    .from("tasks")
+    .select(`
+      id, status, assigned_to,
+      property:properties!inner(id, owner_id)
+    `)
+    .eq("id", taskId)
+    .single();
+
+  if (taskError || !task) {
+    return { data: null, error: "Task not found" };
+  }
+
+  // Verify manager owns the property
+  const property = task.property as unknown as { id: string; owner_id: string };
+  if (property.owner_id !== user.id) {
+    logger.warn("Manager attempted to assign task for property they don't own", {
+      userId: user.id,
+      taskId,
+      propertyOwnerId: property.owner_id,
+    });
+    return { data: null, error: "You can only assign tasks for your own properties" };
+  }
+
+  // Determine new status
+  const previousStatus = task.status;
+  const newStatus = task.status === "open" ? "assigned" : task.status;
+
+  // Perform update
+  const { data: updatedTask, error: updateError } = await supabase
+    .from("tasks")
+    .update({
+      assigned_to: staffId,
+      status: newStatus,
+    })
+    .eq("id", taskId)
+    .select()
+    .single();
+
+  if (updateError) {
+    logger.apiError("assignTask", updateError, { userId: user.id, taskId, staffId });
+    return { data: null, error: updateError.message };
+  }
+
+  // Create task event
+  await supabase.from("task_events").insert({
+    task_id: taskId,
+    actor_id: user.id,
+    from_status: previousStatus,
+    to_status: newStatus,
+    note: note || `Assigned to staff member`,
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/staff");
+  revalidatePath("/staff/tasks");
+
+  return { data: updatedTask as Task, error: null };
+}
+
+/**
+ * Unassign a task (remove staff assignment)
+ * Only managers can unassign tasks for their properties
+ */
+export async function unassignTask(
+  taskId: string,
+  note?: string
+): Promise<{ data: Task | null; error: string | null }> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    logger.unauthorized("unassignTask", { taskId });
+    return { data: null, error: "Unauthorized" };
+  }
+
+  // Verify user is a manager
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || profile.role !== "manager") {
+    return { data: null, error: "Only managers can unassign tasks" };
+  }
+
+  // Get current task and verify ownership
+  const { data: task, error: taskError } = await supabase
+    .from("tasks")
+    .select(`
+      id, status, assigned_to,
+      property:properties!inner(id, owner_id)
+    `)
+    .eq("id", taskId)
+    .single();
+
+  if (taskError || !task) {
+    return { data: null, error: "Task not found" };
+  }
+
+  const property = task.property as unknown as { id: string; owner_id: string };
+  if (property.owner_id !== user.id) {
+    return { data: null, error: "You can only unassign tasks for your own properties" };
+  }
+
+  // Cannot unassign if task is in_progress or beyond
+  if (["in_progress", "done", "verified"].includes(task.status)) {
+    return { data: null, error: "Cannot unassign a task that is in progress or completed" };
+  }
+
+  const previousStatus = task.status;
+
+  // Perform update
+  const { data: updatedTask, error: updateError } = await supabase
+    .from("tasks")
+    .update({
+      assigned_to: null,
+      status: "open",
+    })
+    .eq("id", taskId)
+    .select()
+    .single();
+
+  if (updateError) {
+    logger.apiError("unassignTask", updateError, { userId: user.id, taskId });
+    return { data: null, error: updateError.message };
+  }
+
+  // Create task event
+  await supabase.from("task_events").insert({
+    task_id: taskId,
+    actor_id: user.id,
+    from_status: previousStatus,
+    to_status: "open",
+    note: note || "Unassigned from staff member",
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/staff");
+  revalidatePath("/staff/tasks");
+
+  return { data: updatedTask as Task, error: null };
+}
+

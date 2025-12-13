@@ -6,6 +6,7 @@ import Link from "next/link";
 import IcalUrlForm from "@/app/components/IcalUrlForm";
 import SyncBookingsButton from "@/app/components/SyncBookingsButton";
 import BookingsSection from "@/app/components/BookingsSection";
+import ManagerTaskList from "@/app/components/ManagerTaskList";
 
 interface PropertyPageProps {
   params: Promise<{ id: string }>;
@@ -243,6 +244,14 @@ export default async function PropertyPage({ params }: PropertyPageProps) {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Tasks Section */}
+      <div className="mt-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+          Tasks
+        </h2>
+        <ManagerTaskList propertyId={property.id} propertyName={property.name} />
       </div>
 
       {/* Bookings Section */}
