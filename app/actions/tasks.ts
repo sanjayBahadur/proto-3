@@ -392,3 +392,127 @@ export async function getNextCleaningTask(
   return { data, error: null };
 }
 
+// =============================================================================
+// STAFF TASK HELPERS
+// =============================================================================
+
+export interface TaskWithProperty extends Task {
+  property: {
+    id: string;
+    name: string;
+    address: string | null;
+  };
+}
+
+/**
+ * Get tasks assigned to the current user with property details
+ */
+export async function getMyTasksWithProperty(): Promise<{
+  data: TaskWithProperty[];
+  error: string | null;
+}> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    logger.unauthorized("getMyTasksWithProperty", {});
+    return { data: [], error: "Unauthorized" };
+  }
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .select(`
+      *,
+      property:properties!inner(id, name, address)
+    `)
+    .eq("assigned_to", user.id)
+    .order("due_at", { ascending: true });
+
+  if (error) {
+    logger.apiError("getMyTasksWithProperty", error, { userId: user.id });
+    return { data: [], error: error.message };
+  }
+
+  return { data: data as TaskWithProperty[], error: null };
+}
+
+/**
+ * Update task status with validation for allowed transitions
+ * Staff can only transition: open/assigned → in_progress → done
+ */
+export async function staffUpdateTaskStatus(
+  taskId: string,
+  newStatus: TaskStatus,
+  note?: string
+): Promise<{ data: Task | null; error: string | null }> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    logger.unauthorized("staffUpdateTaskStatus", { taskId });
+    return { data: null, error: "Unauthorized" };
+  }
+
+  // Get current task
+  const { data: currentTask, error: fetchError } = await supabase
+    .from("tasks")
+    .select("id, status, assigned_to")
+    .eq("id", taskId)
+    .eq("assigned_to", user.id)
+    .single();
+
+  if (fetchError || !currentTask) {
+    return { data: null, error: "Task not found or not assigned to you" };
+  }
+
+  // Validate transition
+  const allowedTransitions: Record<TaskStatus, TaskStatus[]> = {
+    open: ["in_progress"],
+    assigned: ["in_progress"],
+    in_progress: ["done"],
+    done: [], // Staff cannot transition from done
+    verified: [], // Staff cannot transition from verified
+  };
+
+  const allowed = allowedTransitions[currentTask.status as TaskStatus] || [];
+  if (!allowed.includes(newStatus)) {
+    return {
+      data: null,
+      error: `Cannot transition from "${currentTask.status}" to "${newStatus}"`,
+    };
+  }
+
+  // Perform update
+  const { data, error: updateError } = await supabase
+    .from("tasks")
+    .update({ status: newStatus })
+    .eq("id", taskId)
+    .select()
+    .single();
+
+  if (updateError) {
+    logger.apiError("staffUpdateTaskStatus", updateError, { userId: user.id, taskId });
+    return { data: null, error: updateError.message };
+  }
+
+  // Create task event
+  await supabase.from("task_events").insert({
+    task_id: taskId,
+    actor_id: user.id,
+    from_status: currentTask.status,
+    to_status: newStatus,
+    note: note || null,
+  });
+
+  revalidatePath("/staff");
+  revalidatePath("/staff/tasks");
+
+  return { data: data as Task, error: null };
+}
+
