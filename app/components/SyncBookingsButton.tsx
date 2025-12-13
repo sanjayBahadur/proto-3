@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { syncPropertyBookings, getSyncStatusMessage, type SyncSummary } from "../actions/sync";
+import { syncPropertyBookings, type SyncSummary } from "../actions/sync";
+import { getSyncStatusMessage } from "@/lib/ical/utils";
 
 interface SyncBookingsButtonProps {
   propertyId: string;

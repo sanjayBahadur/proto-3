@@ -1,18 +1,7 @@
 import ICAL from "ical.js";
+import type { ParsedEvent, ParseResult } from "./types";
 
-export interface ParsedEvent {
-  uid: string;
-  startDate: Date;
-  endDate: Date;
-  summary: string | null;
-  isAllDay: boolean;
-  raw: Record<string, unknown>;
-}
-
-export interface ParseResult {
-  events: ParsedEvent[];
-  errors: string[];
-}
+export type { ParsedEvent, ParseResult };
 
 /**
  * Fetch iCal data from a URL

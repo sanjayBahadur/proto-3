@@ -1,17 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { logger } from "@/lib/logger";
-import { fetchIcalData, parseIcalData, validateIcalUrl, type ParsedEvent } from "./parser";
+import { fetchIcalData, parseIcalData, validateIcalUrl } from "./parser";
+import type { SyncSummary, ParsedEvent } from "./types";
 
-export interface SyncSummary {
-  success: boolean;
-  propertyId: string;
-  inserted: number;
-  updated: number;
-  deleted: number;
-  unchanged: number;
-  errors: string[];
-  duration: number;
-}
+export type { SyncSummary };
 
 interface ExistingBooking {
   id: string;
