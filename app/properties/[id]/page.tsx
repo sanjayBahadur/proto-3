@@ -8,6 +8,7 @@ import SyncBookingsButton from "@/app/components/SyncBookingsButton";
 import BookingsSection from "@/app/components/BookingsSection";
 import ManagerTaskList from "@/app/components/ManagerTaskList";
 import HealthScoreDisplay from "@/app/components/HealthScoreDisplay";
+import SyncStatusDisplay from "@/app/components/SyncStatusDisplay";
 
 interface PropertyPageProps {
   params: Promise<{ id: string }>;
@@ -178,6 +179,13 @@ export default async function PropertyPage({ params }: PropertyPageProps) {
             <IcalUrlForm propertyId={property.id} currentUrl={property.ical_url} />
             <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
               <SyncBookingsButton propertyId={property.id} hasIcalUrl={!!property.ical_url} />
+            </div>
+            <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
+              <SyncStatusDisplay
+                lastSyncAt={property.last_sync_at}
+                lastSyncStatus={property.last_sync_status}
+                hasIcalUrl={!!property.ical_url}
+              />
             </div>
           </div>
         </div>

@@ -13,6 +13,8 @@ export interface Property {
   lng: number;
   ical_url: string | null;
   health_score: number;
+  last_sync_at: string | null;
+  last_sync_status: "success" | "error" | "pending" | null;
   created_at: string;
 }
 

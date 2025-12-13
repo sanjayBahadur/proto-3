@@ -264,12 +264,45 @@ export async function syncPropertyCalendar(propertyId: string): Promise<SyncSumm
       errors: summary.errors.length,
     });
 
+    // Update sync status on property
+    await updateSyncStatus(supabase, propertyId, summary.success ? "success" : "error");
+
     return finalizeSummary(summary, startTime);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     summary.errors.push(`Sync failed: ${message}`);
     logger.apiError("syncPropertyCalendar", error, { propertyId });
+
+    // Update sync status on property
+    try {
+      const supabase = await createClient();
+      await updateSyncStatus(supabase, propertyId, "error");
+    } catch {
+      // Ignore errors updating sync status
+    }
+
     return finalizeSummary(summary, startTime);
+  }
+}
+
+/**
+ * Update the sync status on a property
+ */
+async function updateSyncStatus(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  propertyId: string,
+  status: "success" | "error" | "pending"
+): Promise<void> {
+  try {
+    await supabase
+      .from("properties")
+      .update({
+        last_sync_at: new Date().toISOString(),
+        last_sync_status: status,
+      })
+      .eq("id", propertyId);
+  } catch (error) {
+    logger.warn("Failed to update sync status", { propertyId, status, error });
   }
 }
 
