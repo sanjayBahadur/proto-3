@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { updateProperty, type Property } from "../actions/properties";
 import { getNextBooking } from "../actions/bookings";
+import { HealthScoreBadge } from "./HealthScoreDisplay";
 import type { UserRole } from "@/lib/supabase/roles";
 
 interface PropertySidePanelProps {
@@ -210,6 +211,16 @@ export default function PropertySidePanel({
                   </p>
                 </div>
               )}
+
+              {/* Health Score */}
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  Health
+                </label>
+                <div className="mt-1.5">
+                  <HealthScoreBadge score={property.health_score} />
+                </div>
+              </div>
 
               {/* Next Booking */}
               <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">

@@ -13,28 +13,53 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Property } from "../actions/properties";
 
-// Fix for default marker icons in Leaflet with webpack/Next.js
-const defaultIcon = L.icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+// Marker icons based on health score
+const markerBase = {
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
+  iconSize: [25, 41] as [number, number],
+  iconAnchor: [12, 41] as [number, number],
+  popupAnchor: [1, -34] as [number, number],
+  shadowSize: [41, 41] as [number, number],
+};
+
+// Color markers from leaflet-color-markers
+const markerIcons = {
+  green: L.icon({
+    ...markerBase,
+    iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+  }),
+  blue: L.icon({
+    ...markerBase,
+    iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
+  }),
+  yellow: L.icon({
+    ...markerBase,
+    iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png",
+  }),
+  orange: L.icon({
+    ...markerBase,
+    iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png",
+  }),
+  red: L.icon({
+    ...markerBase,
+    iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
+  }),
+};
+
+// Get icon based on health score
+function getHealthIcon(score: number): L.Icon {
+  if (score >= 90) return markerIcons.green;
+  if (score >= 70) return markerIcons.blue;
+  if (score >= 50) return markerIcons.yellow;
+  if (score >= 30) return markerIcons.orange;
+  return markerIcons.red;
+}
+
+// Default icon
+const defaultIcon = markerIcons.blue;
 
 // Green icon for claim mode
-const claimIcon = L.icon({
-  iconUrl:
-    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
+const claimIcon = markerIcons.green;
 
 L.Marker.prototype.options.icon = defaultIcon;
 
@@ -112,11 +137,12 @@ export default function Map({
       <FitBounds properties={properties} />
       <MapClickHandler isClaimMode={isClaimMode} onMapClick={onMapClick} />
 
-      {/* Existing property markers */}
+      {/* Existing property markers - color coded by health */}
       {properties.map((property) => (
         <Marker
           key={property.id}
           position={[property.lat, property.lng]}
+          icon={getHealthIcon(property.health_score)}
           eventHandlers={{
             click: () => {
               if (!isClaimMode) {
@@ -131,6 +157,9 @@ export default function Map({
               {property.address && (
                 <p className="mt-1 text-zinc-600">{property.address}</p>
               )}
+              <p className="mt-1 text-xs text-zinc-500">
+                Health: {property.health_score}/100
+              </p>
             </div>
           </Popup>
         </Marker>
