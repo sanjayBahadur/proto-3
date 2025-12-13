@@ -154,6 +154,19 @@ CREATE POLICY "Staff can create events for their assigned tasks"
   );
 
 -- =============================================================================
+-- FUNCTIONS
+-- =============================================================================
+
+-- Create or replace the updated_at trigger function (idempotent)
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- =============================================================================
 -- TRIGGERS
 -- =============================================================================
 
@@ -161,7 +174,7 @@ CREATE POLICY "Staff can create events for their assigned tasks"
 CREATE TRIGGER update_tasks_updated_at
   BEFORE UPDATE ON public.tasks
   FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
+  EXECUTE FUNCTION public.update_updated_at_column();
 
 -- =============================================================================
 -- GRANTS
