@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { logger } from "@/lib/logger";
+import { updatePropertyHealth } from "@/lib/health";
 
 // =============================================================================
 // TYPES
@@ -243,6 +244,9 @@ export async function generateCleaningTasks(
       unchanged: summary.unchanged,
       errors: summary.errors.length,
     });
+
+    // Update property health score
+    await updatePropertyHealth(propertyId);
 
     return finalizeSummary(summary, startTime);
   } catch (error) {

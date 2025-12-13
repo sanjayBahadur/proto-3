@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/lib/logger";
+import { updatePropertyHealth } from "@/lib/health";
 
 // =============================================================================
 // TYPES
@@ -272,6 +273,9 @@ export async function updateTask(
       to_status: input.status,
       note: note || null,
     });
+
+    // Update property health if status changed
+    await updatePropertyHealth(data.property_id);
   }
 
   revalidatePath("/dashboard");
@@ -509,6 +513,9 @@ export async function staffUpdateTaskStatus(
     to_status: newStatus,
     note: note || null,
   });
+
+  // Update property health
+  await updatePropertyHealth(data.property_id);
 
   revalidatePath("/staff");
   revalidatePath("/staff/tasks");

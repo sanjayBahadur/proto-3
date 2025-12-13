@@ -12,6 +12,7 @@ export interface Property {
   lat: number;
   lng: number;
   ical_url: string | null;
+  health_score: number;
   created_at: string;
 }
 
