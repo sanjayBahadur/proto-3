@@ -1,7 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentUserRole, ensureUserProfile } from "@/lib/supabase/roles";
+import { requireManagerOrAdmin } from "@/lib/supabase/roles";
 import { listProperties } from "@/app/actions/properties";
-import { redirect } from "next/navigation";
 import RoleBadge from "../components/RoleBadge";
 import CreatePropertyForm from "../components/CreatePropertyForm";
 import PropertyList from "../components/PropertyList";
@@ -9,25 +7,14 @@ import PropertyMapSection from "../components/PropertyMapSection";
 import Card from "../components/ui/Card";
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Only managers and admins can access dashboard
+  const currentUser = await requireManagerOrAdmin("/login");
+  const role = currentUser.profile.role;
 
-  if (!user) {
-    redirect("/login");
-  }
+  // Get properties
+  const { data: properties, error: propertiesError } = await listProperties();
 
-  // Ensure profile exists (creates with default "manager" role if missing)
-  await ensureUserProfile(user.id);
-
-  // Get user's role and properties
-  const [role, { data: properties, error: propertiesError }] = await Promise.all([
-    getCurrentUserRole(),
-    listProperties(),
-  ]);
-
-  const isManager = role === "manager";
+  const canManageProperties = role === "manager" || role === "admin";
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -40,7 +27,7 @@ export default async function DashboardPage() {
           {role && <RoleBadge role={role} />}
         </div>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Welcome back, {user.email}
+          Welcome back, {currentUser.email}
         </p>
       </header>
 
@@ -191,7 +178,7 @@ export default async function DashboardPage() {
               No properties yet
             </p>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              {isManager
+              {canManageProperties
                 ? 'Click "Claim Property" then click on the map to add your first property'
                 : "Properties will appear here once added by a manager"}
             </p>
@@ -203,15 +190,50 @@ export default async function DashboardPage() {
       <section className="mb-8">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
-            Your Properties
+            {role === "admin" ? "All Properties" : "Your Properties"}
           </h2>
-          {isManager && <CreatePropertyForm />}
+          {canManageProperties && <CreatePropertyForm />}
         </div>
         <PropertyList properties={properties} userRole={role} />
       </section>
 
       {/* Role-specific content */}
-      {isManager && (
+      {role === "admin" && (
+        <section>
+          <Card className="border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950/30">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/50">
+                <svg
+                  className="h-5 w-5 text-purple-600 dark:text-purple-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-lg font-medium text-purple-900 dark:text-purple-100">
+                  Admin Access
+                </h2>
+                <p className="mt-1 text-sm text-purple-700 dark:text-purple-300">
+                  You have full administrative access. Visit the{" "}
+                  <a href="/admin" className="underline hover:text-purple-900">
+                    Admin Dashboard
+                  </a>{" "}
+                  to manage users and organizations.
+                </p>
+              </div>
+            </div>
+          </Card>
+        </section>
+      )}
+      {role === "manager" && (
         <section>
           <Card className="border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/30">
             <div className="flex items-start gap-4">

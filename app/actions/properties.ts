@@ -3,10 +3,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/lib/logger";
+import { getCurrentUser, requireManagerOrAdmin } from "@/lib/supabase/roles";
 
 export interface Property {
   id: string;
   owner_id: string;
+  org_id: string | null;
   name: string;
   address: string | null;
   lat: number;
@@ -57,25 +59,20 @@ function isValidIcalUrl(url: string): boolean {
 
 /**
  * Create a new property for the current user
+ * Only managers and admins can create properties
  */
 export async function createProperty(
   input: CreatePropertyInput
 ): Promise<{ data: Property | null; error: string | null }> {
+  try {
+    const currentUser = await requireManagerOrAdmin();
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    logger.unauthorized("createProperty", { input });
-    return { data: null, error: "Unauthorized" };
-  }
 
   const { data, error } = await supabase
     .from("properties")
     .insert({
-      owner_id: user.id,
+        owner_id: currentUser.id,
+        org_id: currentUser.profile.org_id, // Assign to user's org
       name: input.name,
       address: input.address || null,
       lat: input.lat,
@@ -85,41 +82,84 @@ export async function createProperty(
     .single();
 
   if (error) {
-    logger.apiError("createProperty", error, { userId: user.id, input });
+      logger.apiError("createProperty", error, { userId: currentUser.id, input });
     return { data: null, error: error.message };
   }
 
-  logger.info("Property created", { userId: user.id, propertyId: data.id });
+    logger.info("Property created", { userId: currentUser.id, propertyId: data.id });
   revalidatePath("/dashboard");
   return { data: data as Property, error: null };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unauthorized";
+    logger.unauthorized("createProperty", { input });
+    return { data: null, error: message };
+  }
 }
 
 /**
- * List all properties for the current user
+ * List properties for the current user
+ * - Admin: can see all properties (use listAllProperties for full access)
+ * - Manager: sees own properties
+ * - Staff: handled by RLS (sees org properties)
  */
 export async function listProperties(): Promise<{
   data: Property[];
   error: string | null;
 }> {
+  const currentUser = await getCurrentUser();
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!currentUser) {
     logger.unauthorized("listProperties");
     return { data: [], error: "Unauthorized" };
   }
 
+  // For managers, filter to their own properties
+  // Admins will see all (via RLS) but we filter for consistency
+  let query = supabase
+    .from("properties")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  // Only filter by owner for managers (admins see all via RLS)
+  if (currentUser.profile.role === "manager") {
+    query = query.eq("owner_id", currentUser.id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    logger.apiError("listProperties", error, { userId: currentUser.id });
+    return { data: [], error: error.message };
+  }
+
+  return { data: data as Property[], error: null };
+}
+
+/**
+ * List properties by organization
+ * Useful for staff map view
+ */
+export async function listOrgProperties(): Promise<{
+  data: Property[];
+  error: string | null;
+}> {
+  const currentUser = await getCurrentUser();
+  const supabase = await createClient();
+
+  if (!currentUser) {
+    logger.unauthorized("listOrgProperties");
+    return { data: [], error: "Unauthorized" };
+  }
+
+  // RLS handles org filtering for staff
   const { data, error } = await supabase
     .from("properties")
     .select("*")
-    .eq("owner_id", user.id)
-    .order("created_at", { ascending: false });
+    .order("name", { ascending: true });
 
   if (error) {
-    logger.apiError("listProperties", error, { userId: user.id });
+    logger.apiError("listOrgProperties", error, { userId: currentUser.id });
     return { data: [], error: error.message };
   }
 

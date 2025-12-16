@@ -42,7 +42,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (user) {
           // Ensure profile exists and get role
-          const profile = await ensureUserProfileClient(user.id);
+          const profile = await ensureUserProfileClient(user.id, user.email || undefined);
+          
+          // Check if user is disabled
+          if (profile?.disabled) {
+            await supabase.auth.signOut();
+            setUser(null);
+            setRole(null);
+            return;
+          }
+          
           setRole(profile?.role ?? null);
         }
       } catch (err) {
@@ -63,7 +72,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (currentUser) {
         // Ensure profile exists on auth state change (e.g., after login)
-        const profile = await ensureUserProfileClient(currentUser.id);
+        const profile = await ensureUserProfileClient(
+          currentUser.id, 
+          currentUser.email || undefined
+        );
+        
+        // Check if user is disabled
+        if (profile?.disabled) {
+          await supabase.auth.signOut();
+          setUser(null);
+          setRole(null);
+          return;
+        }
+        
         setRole(profile?.role ?? null);
       } else {
         setRole(null);
@@ -88,7 +109,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error.message };
     }
 
+    // Get profile to determine redirect
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const profile = await ensureUserProfileClient(user.id, user.email || undefined);
+      
+      // Check if disabled
+      if (profile?.disabled) {
+        await supabase.auth.signOut();
+        return { error: "Account has been disabled. Contact an administrator." };
+      }
+      
+      // Redirect based on role
+      switch (profile?.role) {
+        case "admin":
+          router.push("/admin");
+          break;
+        case "staff":
+          router.push("/staff");
+          break;
+        default:
+          router.push("/dashboard");
+      }
+    } else {
     router.push("/dashboard");
+    }
+    
     router.refresh();
     return { error: null };
   };

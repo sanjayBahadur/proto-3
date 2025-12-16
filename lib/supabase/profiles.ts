@@ -4,6 +4,9 @@ import type { UserRole } from "./roles";
 export interface UserProfile {
   id: string;
   role: UserRole;
+  email: string | null;
+  org_id: string | null;
+  disabled: boolean;
   created_at: string;
 }
 
@@ -12,7 +15,8 @@ export interface UserProfile {
  * Creates one with default role "manager" if missing.
  */
 export async function ensureUserProfileClient(
-  userId: string
+  userId: string,
+  email?: string
 ): Promise<UserProfile | null> {
   const supabase = createClient();
 
@@ -24,15 +28,32 @@ export async function ensureUserProfileClient(
     .single();
 
   if (existingProfile) {
+    // Update email if provided and different
+    if (email && existingProfile.email !== email) {
+      await supabase
+        .from("profiles")
+        .update({ email })
+        .eq("id", userId);
+    }
     return existingProfile as UserProfile;
   }
 
-  // Create new profile with default role
+  // Get default org ID for new users
+  const { data: defaultOrg } = await supabase
+    .from("organizations")
+    .select("id")
+    .eq("name", "Default Organization")
+    .single();
+
+  // Create new profile with default role "manager"
   const { data: newProfile, error } = await supabase
     .from("profiles")
     .insert({
       id: userId,
       role: "manager" as UserRole,
+      email: email || null,
+      org_id: defaultOrg?.id || null,
+      disabled: false,
     })
     .select()
     .single();
@@ -59,6 +80,9 @@ export async function getUserProfileClient(
     .eq("id", userId)
     .single();
 
-  return profile as UserProfile | null;
-}
+  if (!profile || profile.disabled) {
+    return null;
+  }
 
+  return profile as UserProfile;
+}

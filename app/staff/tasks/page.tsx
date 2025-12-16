@@ -1,29 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentUserRole, ensureUserProfile } from "@/lib/supabase/roles";
-import { redirect } from "next/navigation";
+import { requireRole } from "@/lib/supabase/roles";
 import { getMyTasksWithProperty } from "@/app/actions/tasks";
 import StaffTaskList from "./StaffTaskList";
 import Link from "next/link";
 
 export default async function StaffTasksPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  // Ensure profile exists
-  await ensureUserProfile(user.id);
-
-  // Check user role - only staff can access this page
-  const role = await getCurrentUserRole();
-
-  if (role !== "staff") {
-    redirect("/dashboard");
-  }
+  // Staff and admin can access this page
+  await requireRole(["staff", "admin"], "/login");
 
   // Get tasks assigned to this user
   const { data: tasks, error } = await getMyTasksWithProperty();

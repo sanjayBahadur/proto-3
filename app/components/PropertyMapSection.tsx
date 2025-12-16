@@ -25,7 +25,7 @@ export default function PropertyMapSection({
     lng: number;
   } | null>(null);
 
-  const canCreateProperties = userRole === "manager";
+  const canCreateProperties = userRole === "manager" || userRole === "admin";
 
   const handleStartClaimMode = () => {
     setSelectedProperty(null);

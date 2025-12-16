@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/lib/logger";
 import { updatePropertyHealth } from "@/lib/health";
+import { getCurrentUser, requireManagerOrAdmin } from "@/lib/supabase/roles";
 
 // =============================================================================
 // TYPES
@@ -103,19 +104,17 @@ export async function createTask(
 }
 
 /**
- * List tasks for a property (managers) or assigned tasks (staff)
+ * List tasks for a property (managers/admins) or assigned tasks (staff)
+ * RLS handles visibility based on role
  */
 export async function listTasks(
   propertyId?: string,
   options?: { status?: TaskStatus; assignedTo?: string; limit?: number }
 ): Promise<{ data: Task[]; error: string | null }> {
+  const currentUser = await getCurrentUser();
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!currentUser) {
     logger.unauthorized("listTasks", { propertyId });
     return { data: [], error: "Unauthorized" };
   }
@@ -144,7 +143,7 @@ export async function listTasks(
   const { data, error } = await query;
 
   if (error) {
-    logger.apiError("listTasks", error, { userId: user.id, propertyId });
+    logger.apiError("listTasks", error, { userId: currentUser.id, propertyId });
     return { data: [], error: error.message };
   }
 
@@ -535,101 +534,87 @@ export interface StaffMember {
 
 /**
  * Get list of staff members for task assignment dropdown
- * Only accessible by managers
+ * Only accessible by managers and admins
+ * Returns staff in the same org (for managers) or all staff (for admins)
  */
 export async function listStaffMembers(): Promise<{
   data: StaffMember[];
   error: string | null;
 }> {
+  try {
+    const currentUser = await requireManagerOrAdmin();
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    logger.unauthorized("listStaffMembers", {});
-    return { data: [], error: "Unauthorized" };
-  }
-
-  // Verify user is a manager
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || profile.role !== "manager") {
-    logger.warn("Non-manager attempted to list staff", { userId: user.id });
-    return { data: [], error: "Only managers can view staff list" };
-  }
-
-  // Get staff members from profiles
-  const { data: staffProfiles, error } = await supabase
+    // Build query - RLS handles org filtering
+    let query = supabase
     .from("profiles")
     .select("id, email, role")
     .eq("role", "staff")
+      .eq("disabled", false)
     .order("email", { ascending: true });
 
+    // For managers, filter to same org
+    if (currentUser.profile.role === "manager" && currentUser.profile.org_id) {
+      query = query.eq("org_id", currentUser.profile.org_id);
+    }
+
+    const { data: staffProfiles, error } = await query;
+
   if (error) {
-    logger.apiError("listStaffMembers", error, { userId: user.id });
+      logger.apiError("listStaffMembers", error, { userId: currentUser.id });
     return { data: [], error: error.message };
   }
 
-  // If email not in profiles, try to get from auth.users via a join isn't possible
-  // We'll need to handle this differently - for now return what we have
   return { data: staffProfiles as StaffMember[], error: null };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unauthorized";
+    return { data: [], error: message };
+  }
 }
 
 /**
  * Assign a task to a staff member
- * Only managers can assign tasks for their properties
+ * Only managers and admins can assign tasks
  */
 export async function assignTask(
   taskId: string,
   staffId: string,
   note?: string
 ): Promise<{ data: Task | null; error: string | null }> {
+  try {
+    const currentUser = await requireManagerOrAdmin();
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    logger.unauthorized("assignTask", { taskId, staffId });
-    return { data: null, error: "Unauthorized" };
-  }
-
-  // Verify user is a manager
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || profile.role !== "manager") {
-    logger.warn("Non-manager attempted to assign task", { userId: user.id, taskId });
-    return { data: null, error: "Only managers can assign tasks" };
-  }
-
-  // Verify staff member exists and has staff role
+    // Verify staff member exists, has staff role, and is not disabled
   const { data: staffProfile } = await supabase
     .from("profiles")
-    .select("id, role")
+      .select("id, role, org_id, disabled")
     .eq("id", staffId)
     .single();
 
-  if (!staffProfile || staffProfile.role !== "staff") {
+    if (!staffProfile || staffProfile.role !== "staff" || staffProfile.disabled) {
     return { data: null, error: "Invalid staff member" };
   }
+
+    // For managers, verify staff is in same org
+    if (currentUser.profile.role === "manager") {
+      if (staffProfile.org_id !== currentUser.profile.org_id) {
+        logger.warn("Manager attempted to assign task to staff in different org", {
+          userId: currentUser.id,
+          staffId,
+          managerOrg: currentUser.profile.org_id,
+          staffOrg: staffProfile.org_id,
+        });
+        return { data: null, error: "Staff member must be in your organization" };
+      }
+    }
 
   // Get current task and verify ownership via property
   const { data: task, error: taskError } = await supabase
     .from("tasks")
     .select(`
       id, status, assigned_to,
-      property:properties!inner(id, owner_id)
+        property:properties!inner(id, owner_id, org_id)
     `)
     .eq("id", taskId)
     .single();
@@ -638,11 +623,11 @@ export async function assignTask(
     return { data: null, error: "Task not found" };
   }
 
-  // Verify manager owns the property
-  const property = task.property as unknown as { id: string; owner_id: string };
-  if (property.owner_id !== user.id) {
+    // For managers, verify they own the property
+    const property = task.property as unknown as { id: string; owner_id: string; org_id: string };
+    if (currentUser.profile.role === "manager" && property.owner_id !== currentUser.id) {
     logger.warn("Manager attempted to assign task for property they don't own", {
-      userId: user.id,
+        userId: currentUser.id,
       taskId,
       propertyOwnerId: property.owner_id,
     });
@@ -665,24 +650,36 @@ export async function assignTask(
     .single();
 
   if (updateError) {
-    logger.apiError("assignTask", updateError, { userId: user.id, taskId, staffId });
+      logger.apiError("assignTask", updateError, { userId: currentUser.id, taskId, staffId });
     return { data: null, error: updateError.message };
   }
 
-  // Create task event
+    // Create task event with audit trail
   await supabase.from("task_events").insert({
     task_id: taskId,
-    actor_id: user.id,
+      actor_id: currentUser.id,
     from_status: previousStatus,
     to_status: newStatus,
     note: note || `Assigned to staff member`,
   });
+
+    logger.info("Task assigned", {
+      userId: currentUser.id,
+      taskId,
+      staffId,
+      previousStatus,
+      newStatus,
+    });
 
   revalidatePath("/dashboard");
   revalidatePath("/staff");
   revalidatePath("/staff/tasks");
 
   return { data: updatedTask as Task, error: null };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unauthorized";
+    return { data: null, error: message };
+  }
 }
 
 /**

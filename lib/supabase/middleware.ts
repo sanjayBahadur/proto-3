@@ -37,7 +37,7 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Protected routes that require authentication
-  const protectedPaths = ["/dashboard", "/staff", "/properties"];
+  const protectedPaths = ["/dashboard", "/staff", "/properties", "/admin"];
   const isProtectedPath = protectedPaths.some((path) =>
     pathname.startsWith(path)
   );
@@ -49,56 +49,74 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect logged-in users away from login page
-  if (pathname === "/login" && user) {
-    // Get user's role to determine where to redirect
-    const { data: profile } = await supabase
+  // Get user profile and check disabled status
+  let profile: { role: string; disabled: boolean } | null = null;
+  if (user) {
+    const { data } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, disabled")
       .eq("id", user.id)
       .single();
+    profile = data;
 
+    // If user is disabled, sign them out and redirect to login
+    if (profile?.disabled) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("error", "account_disabled");
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // Redirect logged-in users away from login page
+  if (pathname === "/login" && user && profile) {
     const url = request.nextUrl.clone();
     // Redirect based on role
-    if (profile?.role === "staff") {
+    switch (profile.role) {
+      case "admin":
+        url.pathname = "/admin";
+        break;
+      case "staff":
       url.pathname = "/staff";
-    } else {
+        break;
+      default:
       url.pathname = "/dashboard";
     }
     return NextResponse.redirect(url);
   }
 
-  // Role-based access control
-  if (user && isProtectedPath) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+  // Role-based access control for protected paths
+  if (user && profile && isProtectedPath) {
+    const role = profile.role;
+    const url = request.nextUrl.clone();
 
-    const role = profile?.role;
-
-    // Staff trying to access manager-only routes
-    if (role === "staff") {
-      const managerOnlyPaths = ["/dashboard", "/properties"];
-      const isManagerOnly = managerOnlyPaths.some((path) =>
-        pathname.startsWith(path)
-      );
-
-      if (isManagerOnly) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/staff";
+    // Admin-only routes
+    if (pathname.startsWith("/admin")) {
+      if (role !== "admin") {
+        // Non-admins cannot access admin routes
+        url.pathname = role === "staff" ? "/staff" : "/dashboard";
         return NextResponse.redirect(url);
       }
     }
 
-    // Managers trying to access staff-only routes
+    // Manager-only routes (dashboard, properties)
+    if (pathname.startsWith("/dashboard") || pathname.startsWith("/properties")) {
+    if (role === "staff") {
+        // Staff cannot access manager dashboard or properties directly
+        url.pathname = "/staff";
+        return NextResponse.redirect(url);
+      }
+      // Note: admin CAN access dashboard and properties
+    }
+
+    // Staff routes - managers go to dashboard, admin can access
+    if (pathname.startsWith("/staff")) {
     if (role === "manager") {
-      if (pathname.startsWith("/staff")) {
-        const url = request.nextUrl.clone();
         url.pathname = "/dashboard";
         return NextResponse.redirect(url);
       }
+      // Note: admin CAN access staff routes for oversight
     }
   }
 

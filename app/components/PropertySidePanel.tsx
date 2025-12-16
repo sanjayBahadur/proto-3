@@ -53,7 +53,7 @@ export default function PropertySidePanel({
   const [nextBooking, setNextBooking] = useState<NextBookingData | null>(null);
   const [loadingBooking, setLoadingBooking] = useState(false);
 
-  const canEdit = userRole === "manager";
+  const canEdit = userRole === "manager" || userRole === "admin";
 
   // Fetch next booking when property changes
   useEffect(() => {

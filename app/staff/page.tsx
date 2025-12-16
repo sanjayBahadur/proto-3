@@ -1,30 +1,12 @@
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentUserRole, ensureUserProfile } from "@/lib/supabase/roles";
-import { redirect } from "next/navigation";
+import { requireRole } from "@/lib/supabase/roles";
 import Link from "next/link";
 import RoleBadge from "../components/RoleBadge";
 import { getMyTasks } from "../actions/tasks";
 
 export default async function StaffPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  // Ensure profile exists
-  await ensureUserProfile(user.id);
-
-  // Check user role - only staff can access this page
-  const role = await getCurrentUserRole();
-
-  if (role !== "staff") {
-    // Managers should go to dashboard
-    redirect("/dashboard");
-  }
+  // Staff and admin can access this page
+  const currentUser = await requireRole(["staff", "admin"], "/login");
+  const role = currentUser.profile.role;
 
   // Get task counts
   const { data: tasks } = await getMyTasks();
@@ -46,7 +28,7 @@ export default async function StaffPage() {
           {role && <RoleBadge role={role} />}
         </div>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Welcome, {user.email}
+          Welcome, {currentUser.email}
         </p>
       </div>
 
@@ -80,6 +62,8 @@ export default async function StaffPage() {
         </div>
       </div>
 
+      {/* Navigation Links */}
+      <div className="space-y-3">
       {/* Tasks Link */}
       <Link
         href="/staff/tasks"
@@ -126,6 +110,52 @@ export default async function StaffPage() {
           />
         </svg>
       </Link>
+
+        {/* Map Link */}
+        <Link
+          href="/staff/map"
+          className="group flex items-center justify-between rounded-lg border border-zinc-200 bg-white p-4 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400">
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-medium text-zinc-900 dark:text-zinc-100">
+                Property Map
+              </h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                View properties in your organization
+              </p>
+            </div>
+          </div>
+          <svg
+            className="h-5 w-5 text-zinc-400 transition-transform group-hover:translate-x-1"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+        </Link>
+      </div>
 
       {/* Urgent Tasks Alert */}
       {urgentTasks.length > 0 && (

@@ -8,10 +8,12 @@ A minimal Next.js application with Supabase authentication, role-based access co
 - TypeScript
 - Tailwind CSS
 - Supabase Auth (email + password)
-- Role-based access control (RBAC) with "manager" and "staff" roles
+- Role-based access control (RBAC) with "admin", "manager", and "staff" roles
+- Organization-based multi-tenancy
 - Properties management with geolocation
 - Interactive Leaflet maps with OpenStreetMap
 - iCal URL storage for calendar integration
+- Task management with status tracking
 - Protected routes with middleware
 - Server and client-side authentication
 
@@ -91,6 +93,12 @@ Run the following SQL migrations in your Supabase SQL Editor (**SQL Editor** →
 | 3 | `003_add_ical_url.sql` | iCal URL column |
 | 4 | `004_create_bookings.sql` | Bookings table with RLS |
 | 5 | `005_create_tasks.sql` | Tasks and task_events tables |
+| 6 | `006_manager_view_staff.sql` | Manager staff visibility |
+| 7 | `007_add_health_score.sql` | Property health scoring |
+| 8 | `008_fix_profiles_rls.sql` | Fix RLS recursion |
+| 9 | `009_add_sync_status.sql` | Sync status tracking |
+| 10 | `010_add_admin_and_orgs.sql` | **Admin role + Organizations** |
+| 11 | `011_update_rls_for_orgs.sql` | **Org-scoped RLS policies** |
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for full SQL content.
 
@@ -112,6 +120,104 @@ pnpm dev
 
 ---
 
+## Creating the First Admin
+
+New users automatically get the "manager" role. To create an admin, follow these steps:
+
+### Option 1: Manual SQL (Recommended for first admin)
+
+1. First, create a user via Supabase Auth:
+   - Go to **Authentication** → **Users** → "Add user"
+   - Create the user with email/password
+
+2. Then run this SQL in the Supabase SQL Editor:
+
+```sql
+-- Replace 'your-admin-email@example.com' with the actual email
+UPDATE public.profiles
+SET role = 'admin'
+WHERE email = 'your-admin-email@example.com';
+```
+
+Or, if you know the user's UUID:
+
+```sql
+UPDATE public.profiles
+SET role = 'admin'
+WHERE id = 'user-uuid-here';
+```
+
+### Option 2: Seed Script
+
+Create a one-time seed by running this SQL after migrations:
+
+```sql
+-- Create admin profile for first admin user
+-- Run AFTER the user has signed up at least once
+
+-- Find your user ID first:
+SELECT id, email FROM auth.users WHERE email = 'your-admin@example.com';
+
+-- Then update their role:
+UPDATE public.profiles
+SET role = 'admin'
+WHERE email = 'your-admin@example.com';
+```
+
+### Security Note
+
+- There is no UI to create admins from scratch (by design)
+- Admins cannot demote other admins
+- Admins cannot disable other admin accounts
+- New signups always default to "manager" role
+
+---
+
+## Organization (Org) Assignment
+
+The app uses organizations for multi-tenant access control. Here's how it works:
+
+### How Organizations Work
+
+1. **Default Organization**: Migration 010 creates a "Default Organization" and assigns all existing users/properties to it.
+
+2. **Automatic Assignment**: New users are automatically assigned to the "Default Organization" on signup.
+
+3. **Visibility Rules**:
+   - **Admin**: Can see all organizations, all users, all properties
+   - **Manager**: Can only see properties they own; can assign tasks to staff in their org
+   - **Staff**: Can view all properties in their org on the map; can only update tasks assigned to them
+
+### Assigning Users to Organizations
+
+Admins can change user organizations via `/admin/users` or via SQL:
+
+```sql
+-- Move a user to a different organization
+UPDATE public.profiles
+SET org_id = 'target-org-uuid'
+WHERE id = 'user-uuid';
+
+-- Create a new organization
+INSERT INTO public.organizations (name)
+VALUES ('Acme Property Management');
+
+-- List all organizations
+SELECT id, name, created_at FROM public.organizations;
+```
+
+### Creating Additional Organizations (Admin only)
+
+Currently managed via SQL. A UI will be added in Week 3:
+
+```sql
+INSERT INTO public.organizations (name)
+VALUES ('New Organization Name')
+RETURNING id, name;
+```
+
+---
+
 ## Database Schema
 
 ### profiles
@@ -119,8 +225,19 @@ pnpm dev
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | UUID | Primary key, references `auth.users(id)` |
-| `role` | TEXT | User role: "manager" or "staff" |
+| `role` | TEXT | User role: "admin", "manager", or "staff" |
+| `email` | TEXT | User's email (synced from auth) |
+| `org_id` | UUID | References `organizations(id)` |
+| `disabled` | BOOLEAN | Soft-disable flag (default: false) |
 | `created_at` | TIMESTAMPTZ | When the profile was created |
+
+### organizations
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key, auto-generated |
+| `name` | TEXT | Organization name |
+| `created_at` | TIMESTAMPTZ | When the org was created |
 
 ### properties
 
@@ -128,17 +245,16 @@ pnpm dev
 |--------|------|-------------|
 | `id` | UUID | Primary key, auto-generated |
 | `owner_id` | UUID | References `auth.users(id)`, the property owner |
+| `org_id` | UUID | References `organizations(id)` |
 | `name` | TEXT | Property name (required) |
 | `address` | TEXT | Property address (optional) |
 | `lat` | DOUBLE PRECISION | Latitude coordinate |
 | `lng` | DOUBLE PRECISION | Longitude coordinate |
 | `ical_url` | TEXT | iCal feed URL (optional) |
+| `health_score` | INTEGER | Health score 0-100 (default: 100) |
+| `last_sync_at` | TIMESTAMPTZ | Last calendar sync time |
+| `last_sync_status` | TEXT | Sync status: "success", "error", "pending" |
 | `created_at` | TIMESTAMPTZ | When the property was created |
-
-**Indexes:**
-- `properties_owner_id_idx` — Fast lookup by owner
-- `properties_location_idx` — Fast geospatial queries (lat, lng)
-- `properties_created_at_idx` — Fast sorting by creation date
 
 ### bookings
 
@@ -146,22 +262,14 @@ pnpm dev
 |--------|------|-------------|
 | `id` | UUID | Primary key, auto-generated |
 | `property_id` | UUID | References `properties(id)`, cascade delete |
-| `source` | TEXT | Source of booking: "ical", "manual", etc. (default: "ical") |
-| `external_uid` | TEXT | Unique ID from external calendar (e.g., iCal UID) |
+| `source` | TEXT | Source of booking: "ical", "manual", etc. |
+| `external_uid` | TEXT | Unique ID from external calendar |
 | `start_date` | TIMESTAMPTZ | Booking start date/time |
 | `end_date` | TIMESTAMPTZ | Booking end date/time |
-| `summary` | TEXT | Booking title/summary (nullable) |
-| `raw` | JSONB | Raw event data from source (nullable) |
+| `summary` | TEXT | Booking title/summary |
+| `raw` | JSONB | Raw event data from source |
 | `created_at` | TIMESTAMPTZ | When the booking was created |
 | `updated_at` | TIMESTAMPTZ | When the booking was last updated |
-
-**Indexes:**
-- `bookings_property_external_uid_idx` — Unique constraint for idempotent upserts
-- `bookings_property_id_idx` — Fast lookup by property
-- `bookings_date_range_idx` — Fast date range queries
-- `bookings_start_date_idx` — Fast sorting by start date
-
-**RLS Policies:** Users can only access bookings for properties they own.
 
 ### tasks
 
@@ -177,18 +285,6 @@ pnpm dev
 | `created_at` | TIMESTAMPTZ | When the task was created |
 | `updated_at` | TIMESTAMPTZ | When the task was last updated |
 
-**Indexes:**
-- `tasks_property_id_idx` — Fast lookup by property
-- `tasks_assigned_to_idx` — Fast lookup by assignee
-- `tasks_status_idx` — Fast filtering by status
-- `tasks_due_at_idx` — Fast sorting by due date
-- `tasks_property_status_idx` — Combined property + status queries
-- `tasks_assigned_status_idx` — Combined assignee + status queries
-
-**RLS Policies:**
-- Managers can CRUD tasks for their properties
-- Staff can read tasks assigned to them and update status
-
 ### task_events
 
 | Column | Type | Description |
@@ -201,10 +297,6 @@ pnpm dev
 | `note` | TEXT | Optional note/comment |
 | `created_at` | TIMESTAMPTZ | When the event occurred |
 
-**RLS Policies:**
-- Managers can view/create events for tasks on their properties
-- Staff can view/create events for tasks assigned to them
-
 ---
 
 ## Project Structure
@@ -212,10 +304,15 @@ pnpm dev
 ```
 ├── app/
 │   ├── actions/              # Server actions
+│   │   ├── admin.ts          # Admin user management
 │   │   ├── bookings.ts       # Booking CRUD
 │   │   ├── properties.ts     # Property CRUD with logging
 │   │   ├── sync.ts           # iCal sync action
 │   │   └── tasks.ts          # Task & task event CRUD
+│   ├── admin/                # Admin-only pages
+│   │   ├── layout.tsx        # Admin layout with nav
+│   │   ├── page.tsx          # Admin dashboard
+│   │   └── users/            # User management
 │   ├── components/
 │   │   ├── ui/               # Reusable UI components
 │   │   ├── Map.tsx           # Leaflet map component
@@ -231,12 +328,15 @@ pnpm dev
 │   ├── properties/
 │   │   └── [id]/page.tsx     # Property detail page
 │   └── staff/
-│       └── page.tsx          # Staff portal
+│       ├── page.tsx          # Staff portal
+│       ├── map/              # Staff property map view
+│       └── tasks/            # Staff task management
 ├── lib/
 │   ├── logger.ts             # Structured logging utility
 │   └── supabase/
 │       ├── client.ts         # Browser Supabase client
 │       ├── middleware.ts     # Session & route protection
+│       ├── profiles.ts       # Client-side profile helpers
 │       ├── roles.ts          # Server-side RBAC helpers
 │       └── server.ts         # Server Supabase client
 ├── supabase/
@@ -252,25 +352,30 @@ pnpm dev
 
 ### Roles
 
-| Role | Dashboard | Staff Portal | Properties | Tasks |
-|------|-----------|--------------|------------|-------|
-| **manager** | ✅ | ❌ | Full CRUD | Full CRUD |
-| **staff** | ❌ | ✅ | ❌ | Read assigned, update status |
+| Role | Admin Panel | Dashboard | Staff Portal | Properties | Tasks | User Management |
+|------|-------------|-----------|--------------|------------|-------|-----------------|
+| **admin** | ✅ | ✅ | ✅ | Full CRUD (all) | Full CRUD (all) | ✅ |
+| **manager** | ❌ | ✅ | ❌ | Full CRUD (own) | Full CRUD (own properties) | ❌ |
+| **staff** | ❌ | ❌ | ✅ | Read (org) | Read assigned, update status | ❌ |
 
-### Server-side usage
+### Server-side RBAC Helpers
 
 ```typescript
-import { getCurrentUserRole } from "@/lib/supabase/roles";
+import { 
+  getCurrentUser,
+  requireRole, 
+  requireAdmin,
+  requireManagerOrAdmin 
+} from "@/lib/supabase/roles";
 
-export default async function AdminPage() {
-  const role = await getCurrentUserRole();
-  
-  if (role !== "manager") {
-    redirect("/dashboard");
-  }
-  
-  return <div>Admin content</div>;
-}
+// Get current user with profile
+const user = await getCurrentUser();
+
+// Require specific role(s) - throws/redirects if unauthorized
+await requireRole("admin");
+await requireRole(["admin", "manager"]);
+await requireAdmin("/login");  // Redirect to login if not admin
+await requireManagerOrAdmin();
 ```
 
 ### Client-side usage
@@ -281,7 +386,9 @@ import { useAuth } from "@/app/contexts/AuthContext";
 function MyComponent() {
   const { role } = useAuth();
   
-  if (role === "manager") {
+  if (role === "admin") {
+    return <AdminView />;
+  } else if (role === "manager") {
     return <ManagerView />;
   }
   
@@ -289,13 +396,46 @@ function MyComponent() {
 }
 ```
 
-### Changing a user's role
+### Changing a user's role (Admin only)
+
+Via Admin UI: `/admin/users`
+
+Or via SQL:
 
 ```sql
 UPDATE public.profiles 
 SET role = 'staff' 
 WHERE id = 'user-uuid-here';
 ```
+
+### Disabling a user account (Admin only)
+
+Via Admin UI: `/admin/users` → Click "Disable"
+
+Or via SQL:
+
+```sql
+UPDATE public.profiles 
+SET disabled = true 
+WHERE id = 'user-uuid-here';
+```
+
+---
+
+## Staff Access to Properties
+
+Staff members can now view properties on a map:
+
+1. Navigate to `/staff/map` (or click "Property Map" from Staff Portal)
+2. All properties in the staff member's organization are visible
+3. Click a property pin to see details
+4. Staff view is read-only - no editing capabilities
+
+Staff task restrictions:
+- Can only see tasks assigned to them
+- Can only update task status (not other fields)
+- Valid status transitions: `open/assigned` → `in_progress` → `done`
+- Cannot mark tasks as `verified` (manager/admin only)
 
 ---
 
@@ -307,10 +447,17 @@ WHERE id = 'user-uuid-here';
 | ✅ Create property on map | Complete |
 | ✅ View/edit property | Complete |
 | ✅ Store iCal URL | Complete |
-| ✅ RBAC enforced | Complete |
-| ⏳ Sync bookings | Stub only |
-| ⏳ Health score | Coming soon |
-| ⏳ Package selection | Coming soon |
+| ✅ Sync bookings from iCal | Complete |
+| ✅ Task management | Complete |
+| ✅ Task assignment to staff | Complete |
+| ✅ Staff task status updates | Complete |
+| ✅ RBAC enforced (3 roles) | Complete |
+| ✅ Admin user management | Complete |
+| ✅ Organization support | Complete |
+| ✅ Staff map view | Complete |
+| ✅ Health score | Complete |
+| ⏳ Warehouse catalog | Week 3 |
+| ⏳ Package selection | Week 3 |
 
 ---
 
@@ -329,10 +476,12 @@ Both variables are prefixed with `NEXT_PUBLIC_` to make them available in the br
 
 - Session tokens are stored in HTTP-only cookies (handled by `@supabase/ssr`)
 - The `anon` key is safe to expose publicly—Row Level Security (RLS) protects data
-- Always validate user permissions server-side before sensitive operations
-- Role checks should always be done server-side for security-critical operations
-- Properties are protected by RLS: users can only access their own properties
+- All role checks are enforced server-side via RBAC helpers
+- Properties are protected by RLS with org-scoped access
+- Staff can only update tasks assigned to them with validated status transitions
+- Disabled users are blocked at login and middleware level
 - All API errors are logged with structured context
+- Task events create an audit trail of all status changes
 
 ---
 
