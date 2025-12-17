@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { type TaskWithProperty, type TaskStatus } from "@/app/actions/tasks";
+import { type TaskWithProperty } from "@/app/actions/tasks";
 import TaskCard from "./TaskCard";
 import TaskDrawer from "./TaskDrawer";
 
@@ -42,31 +42,28 @@ export default function StaffTaskList({ initialTasks }: StaffTaskListProps) {
       <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
         <button
           onClick={() => setFilter("active")}
-          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            filter === "active"
-              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
-              : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-          }`}
+          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${filter === "active"
+            ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
+            : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            }`}
         >
           Active ({activeTasks.length})
         </button>
         <button
           onClick={() => setFilter("done")}
-          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            filter === "done"
-              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
-              : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-          }`}
+          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${filter === "done"
+            ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
+            : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            }`}
         >
           Completed ({doneTasks.length})
         </button>
         <button
           onClick={() => setFilter("all")}
-          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            filter === "all"
-              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
-              : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-          }`}
+          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${filter === "all"
+            ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
+            : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            }`}
         >
           All ({tasks.length})
         </button>
@@ -92,8 +89,8 @@ export default function StaffTaskList({ initialTasks }: StaffTaskListProps) {
             {filter === "active"
               ? "No active tasks. Great job!"
               : filter === "done"
-              ? "No completed tasks yet."
-              : "No tasks assigned to you."}
+                ? "No completed tasks yet."
+                : "No tasks assigned to you."}
           </p>
         </div>
       ) : (
@@ -111,6 +108,7 @@ export default function StaffTaskList({ initialTasks }: StaffTaskListProps) {
 
       {/* Task Drawer */}
       <TaskDrawer
+        key={selectedTask?.id}
         task={selectedTask}
         onClose={() => setSelectedTask(null)}
         onUpdate={handleTaskUpdate}

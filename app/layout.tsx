@@ -20,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${geist.variable} font-sans antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${geist.variable} font-sans antialiased`} suppressHydrationWarning>
         <AuthProvider>
           <Navbar />
           <main>{children}</main>

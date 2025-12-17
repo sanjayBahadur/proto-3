@@ -126,6 +126,7 @@ export default function PropertyMapSection({
         {/* Property Details Panel */}
         {selectedProperty && !isClaimMode && (
           <PropertySidePanel
+            key={selectedProperty.id}
             property={selectedProperty}
             onClose={handlePanelClose}
             userRole={userRole}

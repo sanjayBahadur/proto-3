@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   type TaskWithProperty,
   type TaskStatus,
@@ -62,11 +62,7 @@ export default function TaskDrawer({ task, onClose, onUpdate }: TaskDrawerProps)
   const [note, setNote] = useState("");
   const [checkedItems, setCheckedItems] = useState<Set<number>>(new Set());
 
-  // Reset state when task changes
-  useEffect(() => {
-    setNote("");
-    setCheckedItems(new Set());
-  }, [task?.id]);
+
 
   if (!task) return null;
 
@@ -183,11 +179,10 @@ export default function TaskDrawer({ task, onClose, onUpdate }: TaskDrawerProps)
                     className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800"
                   />
                   <span
-                    className={`text-sm ${
-                      checkedItems.has(index)
-                        ? "text-zinc-400 line-through dark:text-zinc-500"
-                        : "text-zinc-700 dark:text-zinc-300"
-                    }`}
+                    className={`text-sm ${checkedItems.has(index)
+                      ? "text-zinc-400 line-through dark:text-zinc-500"
+                      : "text-zinc-700 dark:text-zinc-300"
+                      }`}
                   >
                     {item}
                   </span>
@@ -226,11 +221,10 @@ export default function TaskDrawer({ task, onClose, onUpdate }: TaskDrawerProps)
             <button
               onClick={handleStatusUpdate}
               disabled={isUpdating}
-              className={`w-full rounded-lg py-3 text-center text-sm font-medium text-white transition-colors disabled:opacity-50 ${
-                task.status === "in_progress"
-                  ? "bg-green-600 hover:bg-green-700"
-                  : "bg-blue-600 hover:bg-blue-700"
-              }`}
+              className={`w-full rounded-lg py-3 text-center text-sm font-medium text-white transition-colors disabled:opacity-50 ${task.status === "in_progress"
+                ? "bg-green-600 hover:bg-green-700"
+                : "bg-blue-600 hover:bg-blue-700"
+                }`}
             >
               {isUpdating ? (
                 <span className="flex items-center justify-center gap-2">

@@ -32,9 +32,10 @@ export default function StaffMapSection({ properties }: StaffMapSectionProps) {
   const mapProperties = properties.map((p) => ({
     ...p,
     owner_id: "", // Not needed for display
-    ical_url: null,
-    last_sync_at: null,
-    last_sync_status: null,
+    org_id: null as string | null, // Not needed for display
+    ical_url: null as string | null,
+    last_sync_at: null as string | null,
+    last_sync_status: null as "success" | "error" | "pending" | null,
     created_at: "",
   }));
 
@@ -46,7 +47,7 @@ export default function StaffMapSection({ properties }: StaffMapSectionProps) {
         selectedProperty={selectedProperty ? mapProperties.find((p) => p.id === selectedProperty.id) || null : null}
         isClaimMode={false}
         claimLocation={null}
-        onMapClick={() => {}}
+        onMapClick={() => { }}
       />
 
       {/* Property Details Panel (Read-only) */}

@@ -18,6 +18,7 @@ export interface Property {
   last_sync_at: string | null;
   last_sync_status: "success" | "error" | "pending" | null;
   created_at: string;
+  deleted_at?: string | null;
 }
 
 export interface CreatePropertyInput {
@@ -66,29 +67,29 @@ export async function createProperty(
 ): Promise<{ data: Property | null; error: string | null }> {
   try {
     const currentUser = await requireManagerOrAdmin();
-  const supabase = await createClient();
+    const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("properties")
-    .insert({
+    const { data, error } = await supabase
+      .from("properties")
+      .insert({
         owner_id: currentUser.id,
         org_id: currentUser.profile.org_id, // Assign to user's org
-      name: input.name,
-      address: input.address || null,
-      lat: input.lat,
-      lng: input.lng,
-    })
-    .select()
-    .single();
+        name: input.name,
+        address: input.address || null,
+        lat: input.lat,
+        lng: input.lng,
+      })
+      .select()
+      .single();
 
-  if (error) {
+    if (error) {
       logger.apiError("createProperty", error, { userId: currentUser.id, input });
-    return { data: null, error: error.message };
-  }
+      return { data: null, error: error.message };
+    }
 
     logger.info("Property created", { userId: currentUser.id, propertyId: data.id });
-  revalidatePath("/dashboard");
-  return { data: data as Property, error: null };
+    revalidatePath("/dashboard");
+    return { data: data as Property, error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unauthorized";
     logger.unauthorized("createProperty", { input });
@@ -96,13 +97,14 @@ export async function createProperty(
   }
 }
 
+// ...
 /**
  * List properties for the current user
  * - Admin: can see all properties (use listAllProperties for full access)
- * - Manager: sees own properties
- * - Staff: handled by RLS (sees org properties)
+ * - Manager: sees all properties in their organization
+ * - Staff: sees all properties in their organization
  */
-export async function listProperties(): Promise<{
+export async function listProperties(orgId?: string): Promise<{
   data: Property[];
   error: string | null;
 }> {
@@ -114,16 +116,29 @@ export async function listProperties(): Promise<{
     return { data: [], error: "Unauthorized" };
   }
 
-  // For managers, filter to their own properties
-  // Admins will see all (via RLS) but we filter for consistency
   let query = supabase
     .from("properties")
     .select("*")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
-  // Only filter by owner for managers (admins see all via RLS)
-  if (currentUser.profile.role === "manager") {
-    query = query.eq("owner_id", currentUser.id);
+  // Role-based filtering
+  if (currentUser.profile.role === "admin") {
+    // Admin can filter by specific org if provided, otherwise sees all
+    if (orgId) {
+      query = query.eq("org_id", orgId);
+    }
+  } else if (currentUser.profile.role === "manager" || currentUser.profile.role === "staff") {
+    // Managers and Staff see properties for their assigned organization
+    // Note: This relies on the user having a primary org_id in their profile
+    // TODO: For multi-org staff, we might need to check organization_members
+    if (currentUser.profile.org_id) {
+      query = query.eq("org_id", currentUser.profile.org_id);
+    } else {
+      // If no org assigned, they see nothing (or maybe own properties if legacy?)
+      // For now, strict org-based view:
+      return { data: [], error: null };
+    }
   }
 
   const { data, error } = await query;
@@ -156,6 +171,7 @@ export async function listOrgProperties(): Promise<{
   const { data, error } = await supabase
     .from("properties")
     .select("*")
+    .is("deleted_at", null)
     .order("name", { ascending: true });
 
   if (error) {
@@ -187,6 +203,7 @@ export async function getProperty(
     .from("properties")
     .select("*")
     .eq("id", id)
+    .is("deleted_at", null)
     .eq("owner_id", user.id)
     .single();
 
@@ -320,7 +337,7 @@ export async function deleteProperty(
 
   const { error } = await supabase
     .from("properties")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
     .eq("owner_id", user.id);
 

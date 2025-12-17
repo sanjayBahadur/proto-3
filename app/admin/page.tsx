@@ -251,6 +251,48 @@ export default async function AdminPage() {
           </Link>
 
           <Link
+            href="/admin/organizations"
+            className="group flex items-center gap-4 rounded-lg border border-zinc-200 bg-white p-4 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/50">
+              <svg
+                className="h-5 w-5 text-purple-600 dark:text-purple-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="font-medium text-zinc-900 dark:text-zinc-100">
+                Manage Organizations
+              </h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Create and edit organizations
+              </p>
+            </div>
+            <svg
+              className="h-5 w-5 text-zinc-400 transition-transform group-hover:translate-x-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </Link>
+
+          <Link
             href="/dashboard"
             className="group flex items-center gap-4 rounded-lg border border-zinc-200 bg-white p-4 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
           >
@@ -294,12 +336,41 @@ export default async function AdminPage() {
         </div>
       </section>
 
-      {/* Placeholder for future Week 3 features */}
+      {/* Warehouse & Packages Section */}
       <section className="mt-8">
-        <Card className="border-dashed">
-          <div className="text-center py-6">
+        <h2 className="mb-4 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+          Warehouse & Packages
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Link
+            href="/admin/warehouse"
+            className="group flex items-center gap-4 rounded-lg border border-zinc-200 bg-white p-4 transition-all hover:border-amber-300 hover:bg-amber-50/50 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-amber-700 dark:hover:bg-amber-950/20"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/20">
+              <svg
+                className="h-6 w-6 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">
+                Warehouse Inventory
+              </h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Manage items available for packages
+              </p>
+            </div>
             <svg
-              className="mx-auto h-12 w-12 text-zinc-400"
+              className="h-5 w-5 text-zinc-400 transition-transform group-hover:translate-x-1"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -307,18 +378,54 @@ export default async function AdminPage() {
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
               />
             </svg>
-            <h3 className="mt-4 font-medium text-zinc-900 dark:text-zinc-100">
-              Warehouse & Packages (Week 3)
-            </h3>
-            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-              Warehouse catalog, default/premium packages, and task templates will be available here.
-            </p>
-          </div>
-        </Card>
+          </Link>
+
+          <Link
+            href="/admin/packages"
+            className="group flex items-center gap-4 rounded-lg border border-zinc-200 bg-white p-4 transition-all hover:border-indigo-300 hover:bg-indigo-50/50 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/20"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/20">
+              <svg
+                className="h-6 w-6 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+                />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">
+                Package Builder
+              </h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Create bundles for property distribution
+              </p>
+            </div>
+            <svg
+              className="h-5 w-5 text-zinc-400 transition-transform group-hover:translate-x-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </Link>
+        </div>
       </section>
     </div>
   );

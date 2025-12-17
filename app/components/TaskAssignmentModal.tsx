@@ -130,7 +130,7 @@ export default function TaskAssignmentModal({
               No staff members available.
             </p>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
-              Create a user and set their role to "staff" in Supabase.
+              Create a user and set their role to &quot;staff&quot; in Supabase.
             </p>
           </div>
         ) : (

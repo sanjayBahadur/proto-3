@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useAuth } from "../contexts/AuthContext";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 
@@ -127,6 +128,18 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Don't have an account?{" "}
+            <Link
+              href="/signup"
+              className="font-medium text-zinc-900 hover:underline dark:text-zinc-100"
+            >
+              Create an account
+            </Link>
+          </p>
+        </div>
 
         {/* Footer */}
         <p className="mt-8 text-center text-xs text-zinc-500 dark:text-zinc-500">

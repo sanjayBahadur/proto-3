@@ -5,7 +5,7 @@ import Link from "next/link";
 
 export default async function StaffMapPage() {
   // Staff and admin can access this page
-  const user = await requireRole(["staff", "admin"], "/login");
+  await requireRole(["staff", "admin"], "/login");
   const supabase = await createClient();
 
   // Get org properties (RLS will filter based on user's org)
@@ -51,7 +51,7 @@ export default async function StaffMapPage() {
           About This View
         </h3>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          This map shows all properties in your organization. Click on a property pin 
+          This map shows all properties in your organization. Click on a property pin
           to view details. You can view tasks for properties you have assignments on.
         </p>
       </div>

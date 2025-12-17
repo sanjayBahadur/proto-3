@@ -57,10 +57,7 @@ export default function PropertySidePanel({
 
   // Fetch next booking when property changes
   useEffect(() => {
-    if (!property) {
-      setNextBooking(null);
-      return;
-    }
+    if (!property) return;
 
     async function fetchNextBooking() {
       setLoadingBooking(true);

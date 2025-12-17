@@ -18,6 +18,13 @@ interface AuthContextType {
   role: UserRole | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ error: string | null }>;
+  signup: (
+    email: string,
+    password: string,
+    role: "manager" | "staff",
+    orgName?: string,
+    orgId?: string
+  ) => Promise<{ error: string | null; checkEmail?: boolean }>;
   logout: () => Promise<void>;
 }
 
@@ -43,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (user) {
           // Ensure profile exists and get role
           const profile = await ensureUserProfileClient(user.id, user.email || undefined);
-          
+
           // Check if user is disabled
           if (profile?.disabled) {
             await supabase.auth.signOut();
@@ -51,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setRole(null);
             return;
           }
-          
+
           setRole(profile?.role ?? null);
         }
       } catch (err) {
@@ -73,10 +80,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (currentUser) {
         // Ensure profile exists on auth state change (e.g., after login)
         const profile = await ensureUserProfileClient(
-          currentUser.id, 
+          currentUser.id,
           currentUser.email || undefined
         );
-        
+
         // Check if user is disabled
         if (profile?.disabled) {
           await supabase.auth.signOut();
@@ -84,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRole(null);
           return;
         }
-        
+
         setRole(profile?.role ?? null);
       } else {
         setRole(null);
@@ -113,13 +120,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const profile = await ensureUserProfileClient(user.id, user.email || undefined);
-      
+
       // Check if disabled
       if (profile?.disabled) {
         await supabase.auth.signOut();
         return { error: "Account has been disabled. Contact an administrator." };
       }
-      
+
       // Redirect based on role
       switch (profile?.role) {
         case "admin":
@@ -132,10 +139,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           router.push("/dashboard");
       }
     } else {
-    router.push("/dashboard");
+      router.push("/dashboard");
     }
-    
+
     router.refresh();
+    return { error: null };
+  };
+
+  const signup = async (
+    email: string,
+    password: string,
+    role: "manager" | "staff",
+    orgName?: string,
+    orgId?: string
+  ): Promise<{ error: string | null; checkEmail?: boolean }> => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${location.origin}/auth/callback`,
+        data: {
+          role,
+          org_name: orgName,
+          org_id: orgId,
+        },
+      },
+    });
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    // If a session is created, the user is logged in automatically (email confirmation disabled)
+    // If no session, email confirmation is required
+    if (data.session) {
+      router.push("/dashboard");
+      router.refresh();
+      return { error: null };
+    }
+
+    // User created but not logged in -> requires email check
+    if (data.user) {
+      return { error: null, checkEmail: true };
+    }
+
     return { error: null };
   };
 
@@ -147,7 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, role, isLoading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

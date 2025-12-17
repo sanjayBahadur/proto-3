@@ -1,3 +1,4 @@
+import { generatePackageTasks } from "@/lib/tasks/package-trigger";
 import { createClient } from "@/lib/supabase/server";
 import { logger } from "@/lib/logger";
 import { updatePropertyHealth } from "@/lib/health";
@@ -17,12 +18,7 @@ export interface CleaningTaskSummary {
   duration: number;
 }
 
-interface Booking {
-  id: string;
-  property_id: string;
-  end_date: string;
-  summary: string | null;
-}
+
 
 interface ExistingTask {
   id: string;
@@ -103,7 +99,7 @@ export async function generateCleaningTasks(
     // Get all bookings for this property (future and recent)
     const now = new Date();
     const pastCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
-    
+
     const { data: bookings, error: bookingsError } = await supabase
       .from("bookings")
       .select("id, property_id, end_date, summary")
@@ -181,6 +177,15 @@ export async function generateCleaningTasks(
       } else {
         // Task exists and is up to date
         summary.unchanged++;
+      }
+
+      // INTEGRATION: Generate Package Delivery Tasks for this booking
+      // We do this regardless of cleaning task status to ensure we catch any missed deliveries
+      // generatePackageTasks handles its own idempotency
+      try {
+        await generatePackageTasks(propertyId, 'booking_end', { bookingId: booking.id });
+      } catch (err) {
+        logger.error("Failed to generate package tasks for booking", { bookingId: booking.id, error: err });
       }
     }
 
