@@ -10,7 +10,7 @@ import { getCurrentUser, requireManagerOrAdmin } from "@/lib/supabase/roles";
 // TYPES
 // =============================================================================
 
-export type TaskType = "cleaning" | "restock" | "maintenance";
+export type TaskType = "cleaning" | "restock" | "maintenance" | "delivery";
 export type TaskStatus = "open" | "assigned" | "in_progress" | "done" | "verified";
 
 export interface Task {
@@ -543,15 +543,15 @@ export async function listStaffMembers(): Promise<{
 }> {
   try {
     const currentUser = await requireManagerOrAdmin();
-  const supabase = await createClient();
+    const supabase = await createClient();
 
     // Build query - RLS handles org filtering
     let query = supabase
-    .from("profiles")
-    .select("id, email, role")
-    .eq("role", "staff")
+      .from("profiles")
+      .select("id, email, role")
+      .eq("role", "staff")
       .eq("disabled", false)
-    .order("email", { ascending: true });
+      .order("email", { ascending: true });
 
     // For managers, filter to same org
     if (currentUser.profile.role === "manager" && currentUser.profile.org_id) {
@@ -560,12 +560,12 @@ export async function listStaffMembers(): Promise<{
 
     const { data: staffProfiles, error } = await query;
 
-  if (error) {
+    if (error) {
       logger.apiError("listStaffMembers", error, { userId: currentUser.id });
-    return { data: [], error: error.message };
-  }
+      return { data: [], error: error.message };
+    }
 
-  return { data: staffProfiles as StaffMember[], error: null };
+    return { data: staffProfiles as StaffMember[], error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unauthorized";
     return { data: [], error: message };
@@ -583,18 +583,18 @@ export async function assignTask(
 ): Promise<{ data: Task | null; error: string | null }> {
   try {
     const currentUser = await requireManagerOrAdmin();
-  const supabase = await createClient();
+    const supabase = await createClient();
 
     // Verify staff member exists, has staff role, and is not disabled
-  const { data: staffProfile } = await supabase
-    .from("profiles")
+    const { data: staffProfile } = await supabase
+      .from("profiles")
       .select("id, role, org_id, disabled")
-    .eq("id", staffId)
-    .single();
+      .eq("id", staffId)
+      .single();
 
     if (!staffProfile || staffProfile.role !== "staff" || staffProfile.disabled) {
-    return { data: null, error: "Invalid staff member" };
-  }
+      return { data: null, error: "Invalid staff member" };
+    }
 
     // For managers, verify staff is in same org
     if (currentUser.profile.role === "manager") {
@@ -609,59 +609,59 @@ export async function assignTask(
       }
     }
 
-  // Get current task and verify ownership via property
-  const { data: task, error: taskError } = await supabase
-    .from("tasks")
-    .select(`
+    // Get current task and verify ownership via property
+    const { data: task, error: taskError } = await supabase
+      .from("tasks")
+      .select(`
       id, status, assigned_to,
         property:properties!inner(id, owner_id, org_id)
     `)
-    .eq("id", taskId)
-    .single();
+      .eq("id", taskId)
+      .single();
 
-  if (taskError || !task) {
-    return { data: null, error: "Task not found" };
-  }
+    if (taskError || !task) {
+      return { data: null, error: "Task not found" };
+    }
 
     // For managers, verify they own the property
     const property = task.property as unknown as { id: string; owner_id: string; org_id: string };
     if (currentUser.profile.role === "manager" && property.owner_id !== currentUser.id) {
-    logger.warn("Manager attempted to assign task for property they don't own", {
+      logger.warn("Manager attempted to assign task for property they don't own", {
         userId: currentUser.id,
-      taskId,
-      propertyOwnerId: property.owner_id,
-    });
-    return { data: null, error: "You can only assign tasks for your own properties" };
-  }
+        taskId,
+        propertyOwnerId: property.owner_id,
+      });
+      return { data: null, error: "You can only assign tasks for your own properties" };
+    }
 
-  // Determine new status
-  const previousStatus = task.status;
-  const newStatus = task.status === "open" ? "assigned" : task.status;
+    // Determine new status
+    const previousStatus = task.status;
+    const newStatus = task.status === "open" ? "assigned" : task.status;
 
-  // Perform update
-  const { data: updatedTask, error: updateError } = await supabase
-    .from("tasks")
-    .update({
-      assigned_to: staffId,
-      status: newStatus,
-    })
-    .eq("id", taskId)
-    .select()
-    .single();
+    // Perform update
+    const { data: updatedTask, error: updateError } = await supabase
+      .from("tasks")
+      .update({
+        assigned_to: staffId,
+        status: newStatus,
+      })
+      .eq("id", taskId)
+      .select()
+      .single();
 
-  if (updateError) {
+    if (updateError) {
       logger.apiError("assignTask", updateError, { userId: currentUser.id, taskId, staffId });
-    return { data: null, error: updateError.message };
-  }
+      return { data: null, error: updateError.message };
+    }
 
     // Create task event with audit trail
-  await supabase.from("task_events").insert({
-    task_id: taskId,
+    await supabase.from("task_events").insert({
+      task_id: taskId,
       actor_id: currentUser.id,
-    from_status: previousStatus,
-    to_status: newStatus,
-    note: note || `Assigned to staff member`,
-  });
+      from_status: previousStatus,
+      to_status: newStatus,
+      note: note || `Assigned to staff member`,
+    });
 
     logger.info("Task assigned", {
       userId: currentUser.id,
@@ -671,11 +671,11 @@ export async function assignTask(
       newStatus,
     });
 
-  revalidatePath("/dashboard");
-  revalidatePath("/staff");
-  revalidatePath("/staff/tasks");
+    revalidatePath("/dashboard");
+    revalidatePath("/staff");
+    revalidatePath("/staff/tasks");
 
-  return { data: updatedTask as Task, error: null };
+    return { data: updatedTask as Task, error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unauthorized";
     return { data: null, error: message };

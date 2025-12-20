@@ -10,8 +10,8 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Proto",
-  description: "A clean Next.js application",
+  title: "Comfort Curators",
+  description: "Premium property management for vacation rentals",
 };
 
 export default function RootLayout({

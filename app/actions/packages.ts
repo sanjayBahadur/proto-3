@@ -13,6 +13,7 @@ export interface Package {
     updated_at: string;
     deleted_at: string | null;
     items?: PackageItem[];
+    package_items?: PackageItem[];
 }
 
 export interface PackageItem {

@@ -52,12 +52,12 @@ export function calculateHealthScore(tasks: CleaningTask[]): HealthScore {
 
   for (const task of tasks) {
     const dueAt = new Date(task.due_at);
-    
+
     if (task.status === "done" || task.status === "verified") {
       // Check if completed recently (within 48 hours)
       const updatedAt = new Date(task.updated_at);
       const hoursSinceUpdate = (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60);
-      
+
       if (hoursSinceUpdate <= RECENT_COMPLETION_WINDOW_HOURS) {
         recentCompletions++;
         score += COMPLETION_BONUS;
@@ -65,12 +65,12 @@ export function calculateHealthScore(tasks: CleaningTask[]): HealthScore {
     } else {
       // Check if task is overdue
       const hoursOverdue = (now.getTime() - dueAt.getTime()) / (1000 * 60 * 60);
-      
+
       if (hoursOverdue >= 24) {
         overdueCount++;
         // Base penalty for being 24h+ overdue
         score -= OVERDUE_24H_PENALTY;
-        
+
         // Additional penalty for each day beyond 24h
         const daysOverdue = Math.floor((hoursOverdue - 24) / 24);
         score -= daysOverdue * OVERDUE_PER_DAY_PENALTY;
@@ -125,12 +125,12 @@ export async function updatePropertyHealth(
   try {
     const supabase = await createClient();
 
-    // Get all cleaning tasks for this property
+    // Get all tasks for this property (all types affect health)
     const { data: tasks, error: fetchError } = await supabase
       .from("tasks")
       .select("id, due_at, status, updated_at")
       .eq("property_id", propertyId)
-      .eq("type", "cleaning");
+      .in("type", ["cleaning", "delivery", "restock", "maintenance"]);
 
     if (fetchError) {
       logger.apiError("updatePropertyHealth:fetchTasks", fetchError, { propertyId });
@@ -175,12 +175,12 @@ export async function getPropertyHealth(
   try {
     const supabase = await createClient();
 
-    // Get all cleaning tasks for this property
+    // Get all tasks for this property (all types affect health)
     const { data: tasks, error: fetchError } = await supabase
       .from("tasks")
       .select("id, due_at, status, updated_at")
       .eq("property_id", propertyId)
-      .eq("type", "cleaning");
+      .in("type", ["cleaning", "delivery", "restock", "maintenance"]);
 
     if (fetchError) {
       logger.apiError("getPropertyHealth:fetchTasks", fetchError, { propertyId });

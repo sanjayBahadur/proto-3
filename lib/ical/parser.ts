@@ -10,7 +10,7 @@ export async function fetchIcalData(url: string): Promise<{ data: string | null;
   try {
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "Proto-Calendar-Sync/1.0",
+        "User-Agent": "Comfort-Curators-Calendar-Sync/1.0",
         Accept: "text/calendar, application/calendar+json, */*",
       },
       // Timeout after 30 seconds
@@ -81,9 +81,9 @@ function icalTimeToDate(icalTime: ICAL.Time, isAllDay: boolean): Date {
  */
 function isAllDayEvent(vevent: ICAL.Event): boolean {
   const dtstart = vevent.component.getFirstPropertyValue("dtstart") as ICAL.Time | null;
-  
+
   if (!dtstart) return false;
-  
+
   // All-day events have DATE type (not DATE-TIME)
   return dtstart.isDate === true;
 }
@@ -93,20 +93,20 @@ function isAllDayEvent(vevent: ICAL.Event): boolean {
  */
 function extractUid(vevent: ICAL.Event, index: number): string {
   const uid = vevent.uid;
-  
+
   if (uid && typeof uid === "string" && uid.trim().length > 0) {
     return uid.trim();
   }
-  
+
   // Fallback: generate a UID from event details
   const dtstart = vevent.startDate;
   const summary = vevent.summary || "";
-  
+
   if (dtstart) {
     const dateStr = `${dtstart.year}${dtstart.month}${dtstart.day}`;
     return `generated-${dateStr}-${summary.slice(0, 20).replace(/\W/g, "")}-${index}`;
   }
-  
+
   return `generated-event-${index}`;
 }
 
@@ -132,7 +132,7 @@ export function parseIcalData(icalData: string): ParseResult {
     vevents.forEach((veventComponent, index) => {
       try {
         const vevent = new ICAL.Event(veventComponent);
-        
+
         // Extract start and end dates
         const startDate = vevent.startDate;
         const endDate = vevent.endDate;

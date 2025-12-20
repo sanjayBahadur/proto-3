@@ -51,14 +51,18 @@ export async function generatePackageTasks(
         }
 
         // Filter manually if nested filter didn't work as expected (Safe)
-        const matchingSubs = subs?.filter(s => s.package && s.package.trigger_type === triggerType) || [];
+        // Note: Supabase returns package as array from joined select
+        const matchingSubs = subs?.filter(s => {
+            const pkg = Array.isArray(s.package) ? s.package[0] : s.package;
+            return pkg && pkg.trigger_type === triggerType;
+        }) || [];
         summary.triggeredPackages = matchingSubs.length;
 
         if (matchingSubs.length === 0) return summary;
 
         // 2. Create Tasks
         for (const sub of matchingSubs) {
-            const pkg: any = sub.package;
+            const pkg: any = Array.isArray(sub.package) ? sub.package[0] : sub.package;
 
             if (!pkg) continue;
 

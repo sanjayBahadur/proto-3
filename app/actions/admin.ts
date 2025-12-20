@@ -150,10 +150,13 @@ export async function listAllUsers(params: ListUsersParams = {}): Promise<{
     // If we filtered by orgId, organization_members might only contain that org.
     // If we want FULL org list, we might need a separate fetch or accepting the partial view.
     // For now, partial view is acceptable for Admin table context (if you filter by X, seeing affiliation with X is primary).
-    const transformedData = profiles?.map(profile => ({
-      ...profile,
-      org_ids: profile.organization_members?.map((m: any) => m.org_id) || []
-    })) || [];
+    const transformedData = (profiles ?? []).map(profile => {
+      const profileObj = profile as unknown as Record<string, unknown>;
+      return {
+        ...profileObj,
+        org_ids: (profileObj.organization_members as any[] | undefined)?.map((m: any) => m.org_id) || []
+      };
+    });
 
     return { data: transformedData as unknown as AdminUser[], count: count || 0, error: null };
   } catch (err) {

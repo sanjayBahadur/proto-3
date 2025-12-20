@@ -26,7 +26,7 @@ export default function Navbar() {
           href="/"
           className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100"
         >
-          Proto
+          Comfort Curators
         </Link>
 
         <div className="flex items-center gap-6">
@@ -52,12 +52,12 @@ export default function Navbar() {
                     </>
                   )}
                   {role === "manager" && (
-                  <Link
-                    href="/dashboard"
-                    className="text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-                  >
-                    Dashboard
-                  </Link>
+                    <Link
+                      href="/dashboard"
+                      className="text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                    >
+                      Dashboard
+                    </Link>
                   )}
                   {role === "staff" && (
                     <>
