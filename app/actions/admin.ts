@@ -151,6 +151,7 @@ export async function listAllUsers(params: ListUsersParams = {}): Promise<{
     // If we want FULL org list, we might need a separate fetch or accepting the partial view.
     // For now, partial view is acceptable for Admin table context (if you filter by X, seeing affiliation with X is primary).
     const transformedData = (profiles ?? []).map(profile => {
+      // Type coercion to resolve build error: Spread types may only be created from object types.
       const profileObj = profile as unknown as Record<string, unknown>;
       return {
         ...profileObj,
